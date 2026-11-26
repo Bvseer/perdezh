@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Пердёж-балдёж</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #43260f; --cream: #fff6dc; --sand: #f6dfa4; --wood: #b9773f; --gas: #b7dd3c; --sky: #8fd6ee; --red: #ff5a4f; --blue: #3fa2ff; --yel: #ffcf33; --grn: #5fd35a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--sky); color: var(--ink); font: 700 15px/1.3 Rubik, system-ui, sans-serif; overflow: hidden; touch-action: none; overscroll-behavior: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .card { background: var(--cream); border: 3px solid var(--ink); border-radius: 22px; box-shadow: 0 6px 0 var(--ink); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border: 3px solid var(--ink); border-radius: 16px; box-shadow: 0 5px 0 var(--ink); background: var(--gas); color: var(--ink); font: 900 17px Rubik, system-ui, sans-serif; padding: 13px 16px; cursor: pointer; }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+  .btn.alt { background: #fff; } .btn.blue { background: #8fd0ff; } .btn[disabled] { opacity: .5; }
+  .hide { display: none !important; }
+
+  /* in the game */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+  #hud.on { display: block; }
+  #top { position: absolute; top: calc(8px + env(safe-area-inset-top)); left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; }
+  #top .box { background: var(--cream); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink); padding: 5px 10px; }
+  #hTime { font-weight: 900; font-size: 20px; min-width: 86px; text-align: center; font-variant-numeric: tabular-nums; }
+  #prog { flex: 1; height: 34px; position: relative; padding: 0 !important; overflow: hidden; }
+  #progFill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #9fe0f5; }
+  #progRaft { position: absolute; top: 50%; left: 0; transform: translate(-50%, -50%); font-size: 18px; }
+  #progEnd { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 16px; }
+  #progName { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; opacity: .75; }
+  .ico { pointer-events: auto; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0 !important; cursor: pointer; }
+  #goal { position: absolute; top: calc(54px + env(safe-area-inset-top)); left: 10px; font-size: 12px; background: rgba(255,246,220,.85); border-radius: 10px; padding: 3px 8px; }
+  #crew { position: absolute; top: calc(54px + env(safe-area-inset-top)); right: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  #crew .m { display: flex; align-items: center; gap: 6px; font-size: 12px; background: rgba(255,246,220,.9); border: 2px solid var(--ink); border-radius: 10px; padding: 2px 7px; }
+  #crew .m i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ink); display: block; }
+  #crew .m b { width: 34px; height: 10px; border: 2px solid var(--ink); border-radius: 5px; overflow: hidden; display: block; background: #fff; }
+  #crew .m b u { display: block; height: 100%; background: var(--gas); }
+  #crew .m.off { opacity: .55; }
+  .fart { pointer-events: auto; position: absolute; bottom: calc(22px + env(safe-area-inset-bottom)); width: 124px; height: 124px; border-radius: 50%; border: 4px solid var(--ink); box-shadow: 0 7px 0 var(--ink);
+    --g: 100; --c: var(--red); background: radial-gradient(circle at 50% 50%, var(--c) 0 57%, transparent 58%), conic-gradient(var(--gas) calc(var(--g) * 1%), #ffffff 0); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 38px; cursor: pointer; }
+  .fart small { font: 900 11px Rubik, sans-serif; color: #fff; text-shadow: 0 1px 0 var(--ink); margin-top: -4px; }
+  .fart.on { transform: translateY(5px) scale(.95); box-shadow: 0 2px 0 var(--ink); filter: brightness(1.18) saturate(1.2); }
+  .fart.dry { animation: dry .25s linear infinite; filter: saturate(.4); }
+  @keyframes dry { 25% { margin-left: -3px; } 75% { margin-left: 3px; } }
+  #bL { left: 18px; } #bR { right: 18px; --c: var(--blue); } #bOne { left: 50%; margin-left: -76px; width: 152px; height: 152px; font-size: 50px; }
+  #pop { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 900 64px Rubik, sans-serif; color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 0 6px 0 var(--ink); opacity: 0; }
+  #pop.go { animation: pop .9s ease-out; }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.4) rotate(-8deg); } 18% { opacity: 1; transform: scale(1.15) rotate(3deg); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.1) translateY(-20px); } }
+  #hint { position: absolute; left: 14px; right: 14px; bottom: calc(190px + env(safe-area-inset-bottom)); text-align: center; background: rgba(255,246,220,.94); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 10px; font-size: 14px; }
+  #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 12px; padding: 9px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 86%; text-align: center; z-index: 9; }
+  #toast.on { opacity: 1; }
+
+  /* menu */
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; touch-action: pan-y; background: linear-gradient(rgba(143,214,238,.25), rgba(143,214,238,.55)); }
+  .screen.on { display: flex; }
+  h1 { margin: 6px 0 2px; font: 900 40px/0.95 Rubik, sans-serif; text-align: center; color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 var(--ink); transform: rotate(-3deg); }
+  h1 span { color: var(--gas); display: block; }
+  .sub { margin: 10px 0 12px; text-align: center; background: rgba(255,246,220,.9); border-radius: 12px; padding: 5px 10px; font-size: 13px; }
+  #levels { width: 100%; max-width: 460px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; margin-bottom: 14px; }
+  .lv { padding: 9px 10px 8px; cursor: pointer; position: relative; border-radius: 18px; }
+  .lv:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+  .lv .n { position: absolute; top: -9px; left: -7px; width: 28px; height: 28px; border-radius: 50%; background: var(--yel); border: 3px solid var(--ink); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; }
+  .lv .nm { font-weight: 900; font-size: 15px; margin-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv .st { font-size: 17px; letter-spacing: 1px; margin-top: 2px; } .lv .st s { text-decoration: none; filter: grayscale(1); opacity: .3; }
+  .lv .bt { font-size: 12px; opacity: .7; }
+  .lv.lock { background: #e8e1cc; cursor: default; } .lv.lock .nm, .lv.lock .bt { opacity: .5; }
+  .row { width: 100%; max-width: 460px; display: flex; gap: 10px; margin-bottom: 12px; } .row .btn { flex: 1; }
+  #how { width: 100%; max-width: 460px; padding: 10px 14px; font-weight: 500; font-size: 13.5px; } #how b { font-weight: 900; } #how p { margin: 5px 0; }
+  #ver { margin-top: 10px; font-size: 11px; opacity: .6; }
+
+  /* finish */
+  #over { justify-content: center; background: rgba(40,25,10,.45); }
+  #over .card { width: 100%; max-width: 380px; padding: 16px 16px 18px; text-align: center; }
+  #oTitle { font: 900 26px Rubik, sans-serif; } #oStars { font-size: 46px; letter-spacing: 4px; margin: 4px 0; } #oStars s { text-decoration: none; filter: grayscale(1); opacity: .25; }
+  #oTime { font: 900 34px Rubik, sans-serif; font-variant-numeric: tabular-nums; } #oBest { font-size: 13px; opacity: .75; margin-bottom: 8px; }
+  #oStat { display: flex; justify-content: center; gap: 14px; font-size: 13px; margin-bottom: 14px; }
+  #over .btn { margin-top: 10px; width: 100%; }
+
+  /* friends room */
+  #room { justify-content: center; background: rgba(40,25,10,.35); }
+  #room .card { width: 100%; max-width: 400px; padding: 14px 14px 16px; }
+  #rTitle { font: 900 22px Rubik, sans-serif; text-align: center; } #rSub { text-align: center; font-size: 13px; opacity: .75; margin-bottom: 8px; }
+  #seats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .seat { border: 3px solid var(--ink); border-radius: 14px; padding: 8px; display: flex; align-items: center; gap: 8px; background: #fff; min-height: 48px; font-size: 14px; overflow: hidden; }
+  .seat i { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--ink); } .seat.free { border-style: dashed; opacity: .55; background: transparent; }
+  .seat span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #rLevels { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 4px; }
+  #rLevels .chip { border: 3px solid var(--ink); border-radius: 12px; padding: 5px 9px; font-size: 13px; background: #fff; cursor: pointer; } #rLevels .chip.on { background: var(--yel); }
+  #rLevels.ro .chip { cursor: default; } #rLevels.ro .chip:not(.on) { display: none; }
+  #room .btn { width: 100%; margin-top: 10px; }
+</style>
+<script type="importmap">{ "imports": { "three": "./lib/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <div id="top">
+    <div class="box" id="hTime">0:00.0</div>
+    <div class="box" id="prog"><div id="progFill"></div><div id="progName"></div><div id="progRaft">🛶</div><div id="progEnd">🏁</div></div>
+    <div class="box ico" id="mute">🔊</div>
+    <div class="box ico" id="quit">✕</div>
+  </div>
+  <div id="goal"></div>
+  <div id="crew"></div>
+  <div id="pop"></div>
+  <div id="hint" class="hide"></div>
+  <div class="fart" id="bL">💨<small>ЛЕВЫЙ</small></div>
+  <div class="fart" id="bR">💨<small>ПРАВЫЙ</small></div>
+  <div class="fart hide" id="bOne">💨<small>ПУК!</small></div>
+</div>
+
+<div class="screen on" id="home">
+  <h1>Пердёж-<span>балдёж</span></h1>
+  <div class="sub">Один плот. Летим на газах. Жмите дружно!</div>
+  <div id="levels"></div>
+  <div class="row"><div class="btn blue" id="goFriends">👥 С друзьями</div></div>
+  <div class="card" id="how">
+    <p><b>Каждый пукает со своей стороны.</b> Пукнул левый — плот заносит вправо. Пукнул правый — влево.</p>
+    <p><b>Вместе — прямо.</b> Нажали одновременно — <b>ЗАЛП</b>, плот летит в полтора раза быстрее.</p>
+    <p><b>Газ кончается.</b> Отпусти — накопится. Банка фасоли 🥫 заправляет всех и даёт турбо.</p>
+    <p>Одному: две кнопки на экране или <b>A / D</b>, обе сразу — <b>W</b> или пробел.</p>
+  </div>
+  <div id="ver"></div>
+</div>
+
+<div class="screen" id="room">
+  <div class="card">
+    <div id="rTitle">Экипаж</div>
+    <div id="rSub">Плот отчалит, когда капитан скажет</div>
+    <div id="seats"></div>
+    <div id="rLevels"></div>
+    <div class="btn" id="rStart">Отчаливаем!</div>
+    <div class="btn blue" id="rInvite">📨 Позвать друзей</div>
+    <div class="btn alt" id="rLeave">Выйти</div>
+  </div>
+</div>
+
+<div class="screen" id="over">
+  <div class="card">
+    <div id="oTitle">Доплыли!</div>
+    <div id="oStars"></div>
+    <div id="oTime">0:00.00</div>
+    <div id="oBest"></div>
+    <div id="oStat"></div>
+    <div class="btn" id="oNext">Дальше ▶</div>
+    <div class="btn alt" id="oAgain">↻ Ещё раз</div>
+    <div class="btn alt" id="oHome">Меню</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script type="module" src="./game.js?v=0.1"></script>
+</body>
+</html>

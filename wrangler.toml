@@ -1,0 +1,37 @@
+name = "perdezh"
+main = "server/worker.js"
+compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# the game itself (index.html, game.js, sim.js, lib/) is served from here too; API paths fall through to the worker
+[assets]
+directory = "."
+not_found_handling = "none"
+
+# ---- the test copy: everything new goes here first (perdezh-test.<account>.workers.dev). The real game is only
+# updated on purpose (run the workflow with "prod"), so nobody is updated in the middle of a river.
+# The test copy lets a plain browser in as a guest, so friends mode can be tried without Telegram.
+[env.test]
+name = "perdezh-test"
+
+[env.test.vars]
+GUEST = "1"
+
+[[env.test.durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[env.test.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[env.test.assets]
+directory = "."
+not_found_handling = "none"
