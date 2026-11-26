@@ -1,7 +1,7 @@
 // Пердёж-балдёж: one round raft, and a crew that runs round its edge. The whole game in one place: the server runs
 // it for a room of friends, the phone runs it when you play alone. Fixed steps, no randomness: a run is repeatable.
 
-export const VERSION = '0.6';   // one number for the page and the server
+export const VERSION = '0.7';   // one number for the page and the server
 export const DT = 1/30;         // seconds a step
 export const RR = 1.3;          // the raft is a disc this big
 export const MAXP = 4;
@@ -43,64 +43,92 @@ const q2 = (v) => Math.round(v*100)/100, frac = (v) => v - Math.floor(v);
 //   mud s across r   slows   oil s across r   no grip      geyser s across r period phase   throws the raft up
 //   ramp s across            a jump, if you are fast enough
 //   fall s [drop]            a waterfall: the raft flies off it spinning
+//   row s kind across metres   a wall, reef or thorn pier right across, with one gap that many metres wide
 //   bean s across   gas and turbo      gold s across   a golden roll (three on every river)      cp s   a checkpoint
 //   bridge s                 just for the look
-const STEP = 2;
+const STEP = 2, QUICK = 0.82, NARROW = 0.86, slim = (def, w) => def.sky ? w : Math.max(Math.min(w, 4.6), w*NARROW);   // and every river on the ground is this much narrower   // crocodiles, saws, ferries, cannons and booms all go this much quicker than first written
 export const LEVELS = [
-  { id: 'brook', flow: 2.4, name: 'Ручеёк', theme: 'meadow', par: 33, w: 6.5, tip: 'Течение несёт плот само: посередине быстрее, у берега тише. Притормозить — пукни против течения. Собери три рулона 🧻',
+  { id: 'brook', flow: 2.6, name: 'Ручеёк', theme: 'meadow', par: 34, w: 6.5, tip: 'Течение несёт плот само: посередине быстрее, у берега тише. Притормозить — пукни против течения. Собери три рулона 🧻',
     path: [['s', 30], ['t', 30, 40], ['s', 16], ['w', 10.5], ['s', 44], ['w', 6.5], ['t', -40, 36], ['s', 50]],
     obs: [['bean', 12, 0], ['rock', 24, -0.5, 1.3], ['gold', 24, 0.6], ['bridge', 38], ['bump', 46, 0.5, 0.9], ['bump', 56, -0.4, 0.9], ['cp', 64], ['isle', 80, 100, 0, 2.4], ['gold', 90, -0.8], ['bean', 90, 0.8], ['bump', 108, 0, 1.0],
-      ['rock', 122, 0.5, 1.3], ['rock', 130, -0.5, 1.3], ['cp', 138], ['flow', 146, 0, 3.5, 0, 6], ['fall', 158], ['gold', 166, 0.5], ['bean', 174, -0.3]] },
-  { id: 'bends', flow: 2.8, name: 'Излучина', theme: 'autumn', par: 54, w: 6.5, tip: 'На повороте течение сносит к внешнему берегу — держись внутреннего. Перчатка на штанге отшвыривает: проскакивай, пока отведена',
+      ['rock', 122, 0.5, 1.3], ['rock', 130, -0.5, 1.3], ['cp', 138], ['flow', 146, 0, 3.5, 0, 6], ['fall', 158], ['gold', 166, 0.5], ['bean', 174, -0.3],
+      // and, since the first version turned out far too easy:
+      ['log', 32, 0, 2.8, 1.0, 0], ['spike', 40, -0.5, 0.8], ['spike', 86, -0.8, 0.8], ['rock', 94, 0.62, 1.2], ['wall', 116, -1, -0.05], ['spike', 150, -0.5, 0.8], ['mine', 168, -0.3], ['spike', 176, 0.5, 0.8], ['bump', 180, -0.5, 0.9],
+      ['row', 73, 'wall', 0.6, 4.2], ['wall', 116, 0.6, 1]] },
+  { id: 'bends', flow: 3.1, name: 'Излучина', theme: 'autumn', par: 56, w: 6.5, tip: 'На повороте течение сносит к внешнему берегу — держись внутреннего. Перчатка на штанге отшвыривает: проскакивай, пока отведена',
     path: [['s', 24], ['t', 90, 18], ['s', 14], ['t', -180, 16], ['s', 14], ['t', 90, 18], ['s', 20], ['w', 9], ['s', 30], ['w', 6], ['t', -60, 26], ['s', 36]],
     obs: [['bean', 10, 0], ['wall', 18, -1, 0.05], ['wall', 30, -0.05, 1], ['gold', 30, -0.7], ['arm', 44, 1, 4.5, 3.2, 0], ['cp', 58], ['mud', 74, 0.4, 3], ['bean', 74, -0.6], ['rock', 88, -0.5, 1.3], ['rock', 98, 0.5, 1.3], ['gold', 92, 0.75], ['bridge', 122], ['cp', 126],
-      ['arm', 138, -1, 5, 3, 0], ['arm', 148, 1, 5, 3, 0.5], ['bean', 160, 0], ['wall', 168, 0, 1], ['isle', 184, 202, 0, 2], ['gold', 193, 0.8], ['mud', 193, -0.6, 2.5], ['cp', 206], ['wall', 216, -1, 0], ['wall', 226, 0, 1], ['flow', 244, 0, 3.5, 0, 6], ['fall', 254], ['bean', 262, 0]] },
-  { id: 'rocks', flow: 3.4, name: 'Каменный слалом', theme: 'alpine', par: 47, w: 7, tip: 'С водопада плот летит и крутится — успей перебежать. Перед рифом трамплин: разгонись. Шипастые шары трогать нельзя',
+      ['arm', 138, -1, 5, 3, 0], ['arm', 148, 1, 5, 3, 0.5], ['bean', 160, 0], ['wall', 168, 0, 1], ['isle', 184, 202, 0, 2], ['gold', 193, 0.8], ['mud', 193, -0.6, 2.5], ['cp', 206], ['wall', 216, -1, 0], ['wall', 226, 0, 1], ['flow', 244, 0, 3.5, 0, 6], ['fall', 254], ['bean', 262, 0],
+      // and, since the first version turned out far too easy:
+      ['spike', 24, 0.55, 0.8], ['thorn', 50, -1, -0.4], ['spike', 66, 0, 0.8], ['log', 110, -0.2, 2.6, -1.1, 0.3], ['spike', 132, 0.5, 0.8], ['mine', 143, 0.2], ['bump', 156, -0.5, 0.9], ['spike', 179, -0.6, 0.8], ['spike', 198, 0.9, 0.8], ['spike', 262, -0.5, 0.8], ['spike', 268, 0.45, 0.8],
+      ['wall', 18, 0.72, 1], ['wall', 30, -1, -0.72], ['wall', 168, -1, -0.72], ['wall', 216, 0.85, 1], ['wall', 226, -1, -0.85], ['row', 120, 'thorn', 0.4, 5.0], ['row', 235, 'thorn', -0.3, 4.8]] },
+  { id: 'rocks', flow: 3.7, name: 'Каменный слалом', theme: 'alpine', par: 50, w: 7, tip: 'С водопада плот летит и крутится — успей перебежать. Перед рифом трамплин: разгонись. Шипастые шары трогать нельзя',
     path: [['s', 28], ['t', 35, 40], ['s', 30], ['w', 4.6], ['s', 30], ['w', 8], ['t', -70, 30], ['s', 40], ['t', 50, 34], ['w', 5], ['s', 26], ['w', 7.5], ['s', 40]],
     obs: [['rock', 18, -0.5, 1.4], ['bean', 22, 0.2], ['rock', 30, 0.5, 1.4], ['rock', 42, -0.3, 1.5], ['rock', 42, 0.8, 1.1], ['gold', 42, 0.3], ['bump', 56, -0.6, 0.9], ['rock', 62, 0.3, 1.4], ['spike', 66, -0.75, 0.8], ['cp', 72], ['fall', 84], ['flow', 94, 0, 3, 0, 6], ['barrel', 90, 110, 0.5, 4.5, 0], ['gold', 100, 0.6],
       ['cp', 116], ['pool', 130, -0.3, 4, 9], ['bean', 130, 0.8], ['rock', 142, 0.5, 1.4], ['ramp', 156, 0], ['reef', 162, -1, 0.42], ['gold', 164, -0.1], ['rock', 174, -0.6, 1.5], ['rock', 180, 0.4, 1.5], ['bump', 190, 0, 1], ['rock', 200, 0.6, 1.3], ['rock', 206, -0.5, 1.3], ['cp', 214],
-      ['fall', 222], ['barrel', 224, 242, -0.5, 4, 0.5], ['bean', 232, 0.4], ['spike', 248, 0.15, 0.8], ['rock', 254, -0.6, 1.3], ['rock', 258, 0.5, 1.4], ['ramp', 266, 0.2], ['reef', 272, -0.4, 1]] },
-  { id: 'mill', flow: 2.8, name: 'Лесопилка', theme: 'mill', par: 58, w: 7.5, tip: 'Пила топит плот — начнёшь с чекпойнта. Мельницу обходи вдоль берега. Давилка сходится и расходится: проскакивай, когда открыта',
+      ['fall', 222], ['barrel', 224, 242, -0.5, 4, 0.5], ['bean', 232, 0.4], ['spike', 248, 0.15, 0.8], ['rock', 254, -0.6, 1.3], ['rock', 258, 0.5, 1.4], ['ramp', 266, 0.2], ['reef', 272, -0.4, 1],
+      // and, since the first version turned out far too easy:
+      ['spike', 36, -0.1, 0.8], ['spike', 50, 0.5, 0.8], ['spike', 104, -0.6, 0.6], ['thorn', 124, 0.35, 1], ['spike', 148, -0.5, 0.9], ['spike', 170, 0.55, 0.8], ['mine', 186, -0.5], ['spike', 194, -0.75, 0.9], ['spike', 238, 0.6, 0.6], ['spike', 278, -0.7, 0.8],
+      ['row', 22, 'wall', -0.6, 4.2], ['spike', 58, 0.2, 0.8], ['row', 136, 'thorn', 0.7, 4.8]] },
+  { id: 'mill', flow: 3.1, name: 'Лесопилка', theme: 'mill', par: 56, w: 7.5, tip: 'Пила топит плот — начнёшь с чекпойнта. Мельницу обходи вдоль берега. Давилка сходится и расходится: проскакивай, когда открыта',
     path: [['s', 34], ['t', -50, 30], ['s', 40], ['t', 90, 26], ['s', 36], ['w', 10], ['t', -60, 30], ['s', 26], ['w', 6], ['s', 50]],
     obs: [['bean', 12, 0], ['log', 26, 0, 3.2, 0.9, 0], ['gold', 26, 0.88], ['saw', 44, -0.8, 0.8, 5, 0], ['bridge', 54], ['cp', 60], ['mill', 74, 0, 3.4, 0.7, 0], ['bean', 84, 0.8], ['gate', 96, 5, 0.55, 0], ['gold', 110, -0.7], ['saw', 118, -0.8, 0.2, 3.5, 0], ['saw', 128, -0.2, 0.8, 3.5, 0.5], ['cp', 142],
-      ['barge', 156, -0.6, 0.6, 7, 0, 2.2], ['bean', 164, 0], ['log', 170, 0, 3.2, -0.9, 0.5], ['isle', 184, 204, 0, 2.5], ['saw', 194, -0.95, -0.45, 3, 0], ['gold', 200, -0.7], ['barrel', 186, 206, 0.7, 4, 0], ['cp', 212], ['gate', 222, 4.5, 0.5, 0.3], ['jaws', 240, 4, 0], ['bean', 248, 0], ['mill', 258, 0, 2.0, 1.0, 1.5], ['saw', 270, -0.7, 0.7, 3.5, 0.4]] },
-  { id: 'crocs', flow: 2.2, name: 'Крокодилья заводь', theme: 'jungle', par: 70, w: 8, tip: 'Крокодилы плавают от берега к берегу и между островами. Мины не топят, но отшвыривают. Боковое течение сносит',
+      ['barge', 156, -0.6, 0.6, 7, 0, 2.2], ['bean', 164, 0], ['log', 170, 0, 3.2, -0.9, 0.5], ['isle', 184, 204, 0, 2.5], ['saw', 194, -0.95, -0.45, 3, 0], ['gold', 200, -0.7], ['barrel', 186, 206, 0.9, 4, 0], ['cp', 212], ['gate', 222, 4.5, 0.5, 0.3], ['jaws', 240, 4, 0], ['bean', 248, 0], ['mill', 258, 0, 2.0, 1.0, 1.5], ['saw', 270, -0.7, 0.7, 3.5, 0.4],
+      // and, since the first version turned out far too easy:
+      ['saw', 34, -0.2, 0.9, 3, 0.5], ['spike', 52, 0.5, 0.9], ['log', 86, -0.5, 2.6, -1.2, 0], ['saw', 104, -0.9, 0.9, 3.2, 0.3], ['thorn', 123, 0.55, 1], ['mine', 150, 0], ['spike', 162, -0.7, 0.9], ['saw', 176, -0.9, 0.9, 2.8, 0], ['spike', 208, 0.1, 0.8], ['spike', 230, -0.5, 0.9], ['spike', 233, 0.5, 0.9], ['saw', 264, -0.8, 0.8, 2.6, 0.5], ['mine', 276, -0.4], ['mine', 278, 0.4],
+      ['row', 17, 'wall', -0.6, 4.2], ['row', 111, 'thorn', 0.5, 4.8], ['row', 135, 'wall', 0, 4.0], ['row', 249, 'thorn', -0.5, 4.6]] },
+  { id: 'crocs', flow: 2.6, name: 'Крокодилья заводь', theme: 'jungle', par: 68, w: 8, tip: 'Крокодилы плавают от берега к берегу и между островами. Мины не топят, но отшвыривают. Боковое течение сносит',
     path: [['s', 30], ['t', 60, 28], ['w', 12], ['s', 60], ['w', 7], ['t', -100, 24], ['s', 36], ['t', 70, 26], ['w', 11], ['s', 44], ['w', 7], ['t', -30, 40], ['s', 40]],
-    obs: [['bean', 10, 0], ['croc', 22, -0.8, 0.8, 6, 0], ['mud', 38, -0.4, 3], ['gold', 38, -0.5], ['croc', 50, -0.8, 0.8, 5, 0.3], ['cp', 62], ['isle', 74, 90, -0.45, 2.4], ['isle', 84, 104, 0.5, 2.4], ['croc', 86, -0.12, 0.12, 3, 0], ['mine', 96, -0.75], ['gold', 94, 0.88], ['croc', 100, 0.62, 0.95, 3.2, 0], ['bean', 110, 0], ['cp', 118],
+    obs: [['bean', 10, 0], ['croc', 22, -0.8, 0.8, 6, 0], ['mud', 38, -0.4, 3], ['gold', 38, -0.5], ['croc', 50, -0.8, 0.8, 5, 0.3], ['cp', 62], ['isle', 74, 90, -0.45, 2.4], ['isle', 84, 104, 0.4, 2.4], ['croc', 86, -0.12, 0.12, 3, 0], ['mine', 96, -0.75], ['gold', 94, 0.88], ['croc', 100, 0.62, 0.95, 3.2, 0], ['bean', 110, 0], ['cp', 118],
       ['flow', 134, 0, 4.5, 90, 5], ['croc', 146, -0.8, 0.3, 4, 0], ['croc', 154, -0.3, 0.8, 4, 0.5], ['bridge', 166], ['mine', 172, -0.3], ['mine', 178, 0.45], ['mine', 184, -0.5], ['bean', 178, -0.8], ['cp', 196], ['flow', 212, 0, 4.5, -90, 5], ['croc', 222, -0.8, 0.8, 4.5, 0.2],
-      ['isle', 240, 262, 0, 2.6], ['mud', 250, -0.62, 3], ['gold', 250, -0.7], ['croc', 256, -0.95, -0.45, 3, 0], ['mine', 246, 0.6], ['mine', 254, 0.75], ['bean', 258, 0.65], ['cp', 272], ['croc', 284, -0.8, 0.8, 4, 0], ['fall', 296], ['croc', 308, -0.8, 0.8, 3.6, 0.5], ['bean', 314, 0], ['mine', 318, -0.5], ['mine', 318, 0.5]] },
-  { id: 'sky', flow: 2.8, name: 'Небесная река', theme: 'sky', sky: true, par: 72, w: 5.5, tip: 'Бортов нет: съехал с края — упал. Разрыв в русле перепрыгивай с трамплина на скорости. Ветер сдувает вбок',
+      ['isle', 240, 262, 0, 2.6], ['mud', 250, -0.62, 3], ['gold', 250, -0.7], ['croc', 256, -0.95, -0.45, 3, 0], ['mine', 246, 0.6], ['mine', 254, 0.75], ['bean', 258, 0.65], ['cp', 272], ['croc', 284, -0.8, 0.8, 4, 0], ['fall', 296], ['croc', 308, -0.8, 0.8, 3.6, 0.5], ['bean', 314, 0], ['mine', 318, -0.5], ['mine', 318, 0.5],
+      // and, since the first version turned out far too easy:
+      ['croc', 30, -0.8, 0.8, 4.5, 0.5], ['mine', 44, 0.1], ['croc', 112, -0.5, 0.5, 3.4, 0.2], ['thorn', 140, 0.5, 1], ['croc', 190, -0.8, 0.8, 3.2, 0.4], ['thorn', 216, -1, -0.45], ['spike', 230, 0.3, 0.9], ['croc', 248, 0.4, 0.95, 2.8, 0.3], ['spike', 302, -0.6, 0.8], ['spike', 302, 0.6, 0.8], ['croc', 326, -0.8, 0.8, 3, 0.2],
+      ['row', 127, 'thorn', -0.6, 4.8], ['row', 162, 'thorn', 0.6, 4.8], ['row', 204, 'thorn', 0.3, 4.6], ['row', 266, 'thorn', 0, 4.8]] },
+  { id: 'sky', flow: 3.0, name: 'Небесная река', theme: 'sky', sky: true, par: 66, w: 5.5, tip: 'Бортов нет: съехал с края — упал. Разрыв в русле перепрыгивай с трамплина на скорости. Ветер сдувает вбок',
     path: [['rail', 1], ['s', 20], ['rail', 0], ['s', 20], ['t', 40, 30], ['s', 16], ['s', 14], ['t', -80, 22], ['rail', 1], ['s', 16], ['rail', 0], ['s', 10], ['gap', 6], ['s', 24], ['w', 8], ['s', 30], ['w', 5], ['t', 70, 24], ['s', 14], ['s', 20], ['t', -50, 28], ['s', 12], ['gap', 6], ['s', 34]],
     obs: [['bean', 10, 0], ['rock', 26, 0.4, 1.0], ['gold', 32, -0.6], ['flow', 48, 0, 3.5, 90, 3.2], ['cp', 62], ['spike', 69, -0.5, 0.7], ['fall', 76, 4], ['bean', 84, 0], ['bump', 98, 0.3, 0.8], ['cp', 118], ['arm', 128, 1, 4, 2.8, 0], ['bean', 135, 0], ['ramp', 141, 0],
       ['cp', 158], ['mine', 167, 0.4], ['isle', 184, 198, 0, 1.8], ['bump', 190, -0.75, 0.8], ['gold', 191, 0.7], ['flow', 198, 0, 4, -90, 3.2], ['cp', 208], ['rock', 220, -0.3, 1.0], ['spike', 232, 0.5, 0.7], ['bean', 240, -0.2], ['fall', 250, 4], ['mine', 259, -0.3], ['cp', 268],
-      ['flow', 282, 0, 3.5, 90, 3.6], ['bean', 292, 0], ['ramp', 301, 0], ['gold', 316, 0], ['bump', 326, 0.4, 0.8], ['spike', 336, -0.4, 0.7]] },
-  { id: 'pools', flow: 2.8, name: 'Чёртовы воронки', theme: 'dusk', par: 62, w: 8, tip: 'Середина воронки топит. Гейзер пускает пузыри, потом подбрасывает. На масле плот не слушается',
+      ['flow', 282, 0, 3.5, 90, 3.6], ['bean', 292, 0], ['ramp', 301, 0], ['gold', 316, 0], ['bump', 326, 0.4, 0.8], ['spike', 336, -0.4, 0.7],
+      // and, since the first version turned out far too easy:
+      ['spike', 36, 0.5, 0.7], ['bump', 44, -0.6, 0.8], ['mine', 56, -0.4], ['spike', 92, -0.4, 0.7], ['arm', 108, -1, 4, 2.6, 0.5], ['spike', 122, 0.3, 0.7], ['spike', 174, -0.5, 0.7], ['spike', 202, -0.2, 0.7], ['bump', 226, 0.5, 0.8], ['arm', 244, 1, 3.6, 2.4, 0], ['spike', 276, 0.4, 0.7], ['spike', 288, 0.55, 0.7], ['mine', 320, -0.3],
+      ['wall', 17, -1, -0.1], ['bump', 238, -0.5, 0.8]] },
+  { id: 'pools', flow: 3.1, name: 'Чёртовы воронки', theme: 'dusk', par: 50, w: 8, tip: 'Середина воронки топит. Гейзер пускает пузыри, потом подбрасывает. На масле плот не слушается',
     path: [['s', 30], ['t', 60, 28], ['s', 30], ['w', 5], ['s', 26], ['w', 9], ['t', -100, 24], ['s', 36], ['t', 70, 26], ['w', 5.5], ['s', 30], ['w', 10], ['t', -30, 40], ['s', 44]],
     obs: [['bean', 10, 0], ['pool', 24, 0.45, 4, 9], ['gold', 24, -0.75], ['geyser', 40, -0.35, 2, 4, 0], ['geyser', 49, 0.4, 2, 4, 0.5], ['spike', 56, 0, 0.9], ['cp', 62], ['rock', 71, -0.6, 1.2], ['oil', 76, 0, 4.5], ['rock', 82, 0.6, 1.2], ['bean', 86, 0], ['fall', 92], ['flow', 102, 0, 3.2, 0, 7], ['jaws', 112, 4.5, 0],
       ['pool', 132, -0.35, 4.4, 10], ['pool', 147, 0.5, 4, 10], ['gold', 139, 0.9], ['cp', 160], ['bean', 164, 0], ['flow', 173, 0, 5, 180, 4.2], ['geyser', 185, -0.5, 2, 3.5, 0], ['geyser', 185, 0.5, 2, 3.5, 0.5], ['geyser', 192, 0, 2, 3.5, 0.25], ['spike', 200, -0.65, 0.9], ['oil', 207, 0, 4.5], ['pool', 218, 0.4, 4, 10], ['cp', 228],
-      ['geyser', 239, 0, 1.8, 3, 0], ['flow', 247, 0, 3.5, 0, 7], ['gold', 248, 0], ['isle', 270, 290, 0, 2.5], ['pool', 280, -0.65, 3.6, 10], ['geyser', 276, 0.65, 2, 3.5, 0], ['geyser', 286, 0.65, 2, 3.5, 0.5], ['bean', 296, 0], ['spike', 299, 0.6, 0.9], ['pool', 306, -0.3, 4, 10], ['geyser', 312, 0.4, 2, 3.5, 0]] },
-  { id: 'fort', flow: 3.0, name: 'Пушечный форт', theme: 'desert', par: 57, w: 7.5, tip: 'Пушки сносят, давилка давит, колючие пирсы и шары лопают плот. Двое ворот подряд открываются по очереди',
+      ['geyser', 239, 0, 1.8, 3, 0], ['flow', 247, 0, 3.5, 0, 7], ['gold', 248, 0], ['isle', 270, 290, 0, 2.5], ['pool', 280, -0.65, 3.6, 10], ['geyser', 276, 0.65, 2, 3.5, 0], ['geyser', 286, 0.65, 2, 3.5, 0.5], ['bean', 296, 0], ['spike', 299, 0.6, 0.9], ['pool', 306, -0.3, 4, 10], ['geyser', 312, 0.4, 2, 3.5, 0],
+      // and, since the first version turned out far too easy:
+      ['spike', 32, -0.2, 0.9], ['thorn', 46, -1, -0.55], ['spike', 78, 0, 0.8], ['spike', 106, 0.6, 0.6], ['geyser', 124, 0.3, 2, 3, 0.4], ['spike', 140, 0.1, 0.9], ['thorn', 180, -0.25, 0.25], ['spike', 212, -0.5, 0.9], ['spike', 252, -0.6, 0.6], ['mine', 281, 0.9], ['spike', 304, 0.55, 0.9],
+      ['row', 16, 'thorn', 0.5, 4.8], ['row', 119, 'thorn', -0.5, 4.6], ['row', 154, 'thorn', 0.6, 4.6], ['row', 261, 'thorn', 0, 4.6]] },
+  { id: 'fort', flow: 3.3, name: 'Пушечный форт', theme: 'desert', par: 60, w: 7.5, tip: 'Пушки сносят, давилка давит, колючие пирсы и шары лопают плот. Двое ворот подряд открываются по очереди',
     path: [['s', 36], ['t', -45, 36], ['s', 40], ['t', 90, 24], ['s', 30], ['t', -90, 24], ['s', 40], ['t', 45, 36], ['s', 50]],
     obs: [['bean', 10, 0], ['ball', 22, 1, 3, 0], ['ball', 30, -1, 3, 0.5], ['gold', 26, 0.75], ['wall', 44, -1, 0], ['wall', 55, 0, 1], ['cp', 66], ['gate', 78, 5, 0.5, 0], ['ball', 86, 1, 2.6, 0.2], ['ball', 93, -1, 2.6, 0.6], ['bean', 90, 0], ['mine', 99, 0], ['ramp', 112, 0], ['reef', 118, -1, 0.38], ['gold', 120, 0], ['thorn', 134, -1, -0.38], ['thorn', 134, 0.38, 1], ['cp', 144],
       ['arm', 150, 1, 5, 2.6, 0], ['arm', 158, -1, 5, 2.6, 0.5], ['arm', 166, 1, 5, 2.6, 0], ['bean', 162, 0], ['jaws', 182, 4, 0], ['bridge', 190], ['wall', 198, -0.3, 1], ['cp', 212], ['gate', 222, 4, 0.5, 0], ['gate', 234, 4, 0.5, 0.5], ['gold', 228, -0.7], ['spike', 241, 0.55, 0.9], ['ball', 247, -1, 2.5, 0], ['mine', 256, 0.4], ['mine', 263, -0.4], ['bean', 270, 0], ['spike', 276, 0.6, 0.9],
-      ['ramp', 284, -0.2], ['reef', 290, -0.38, 1], ['jaws', 302, 3.6, 0.5], ['ball', 310, 1, 2.2, 0], ['ball', 316, -1, 2.2, 0.5], ['mine', 322, 0]] },
-  { id: 'gorge', flow: 3.4, name: 'Большой каньон', theme: 'canyon', par: 90, w: 7, tip: 'Здесь всё сразу. Чекпойнтов много — не жадничай',
+      ['ramp', 284, -0.2], ['reef', 290, -0.38, 1], ['jaws', 302, 3.6, 0.5], ['ball', 310, 1, 2.2, 0], ['ball', 316, -1, 2.2, 0.5], ['mine', 322, 0],
+      // and, since the first version turned out far too easy:
+      ['spike', 36, -0.5, 0.9], ['spike', 49, 0.45, 0.8], ['spike', 73, 0.5, 0.9], ['mine', 104, -0.5], ['mine', 104, 0.5], ['spike', 124, 0.7, 0.9], ['bump', 128, 0, 0.9], ['spike', 172, 0, 0.9], ['spike', 208, 0.3, 0.8], ['ball', 228, 1, 2.2, 0.3], ['spike', 252, -0.5, 0.9], ['thorn', 268, -1, -0.45], ['spike', 296, -0.7, 0.9], ['spike', 319, -0.7, 0.8], ['spike', 319, 0.7, 0.8],
+      ['thorn', 44, 0.72, 1], ['thorn', 55, -1, -0.72], ['row', 61, 'thorn', 0, 4.6], ['row', 190, 'thorn', -0.3, 4.6]] },
+  { id: 'gorge', flow: 3.7, name: 'Большой каньон', theme: 'canyon', par: 94, w: 7, tip: 'Здесь всё сразу. Чекпойнтов много — не жадничай',
     path: [['s', 26], ['t', 80, 22], ['s', 20], ['t', -80, 22], ['w', 5], ['s', 30], ['w', 7.5], ['t', -90, 24], ['s', 30], ['t', 120, 22], ['s', 24], ['w', 5.4], ['t', -60, 26], ['s', 26], ['w', 8], ['t', 50, 30], ['s', 30], ['t', -70, 24], ['s', 40]],
     obs: [['bean', 10, 0], ['rock', 20, 0.5, 1.3], ['croc', 34, -0.8, 0.8, 5, 0], ['gold', 45, -0.8], ['spike', 52, 0.5, 0.9], ['mill', 62, 0, 2.6, 0.9, 0], ['cp', 74], ['wall', 84, -1, 0], ['wall', 96, 0, 1], ['fall', 108], ['flow', 116, 0, 3.4, 0, 7], ['barrel', 112, 134, 0.4, 4.5, 0], ['bean', 126, -0.5], ['saw', 147, -0.8, 0.8, 4, 0], ['pool', 161, 0.35, 4, 10], ['spike', 169, -0.65, 0.9], ['cp', 176],
       ['gate', 186, 5, 0.5, 0], ['arm', 194, 1, 4.6, 2.8, 0], ['arm', 202, -1, 4.6, 2.8, 0.5], ['geyser', 214, -0.4, 2, 3.5, 0], ['geyser', 224, 0.4, 2, 3.5, 0.5], ['gold', 219, 0], ['croc', 237, -0.8, 0.8, 4.5, 0.3], ['cp', 251], ['ramp', 258, 0], ['reef', 264, -1, 0.35], ['oil', 271, 0, 3.4], ['bean', 280, 0],
       ['jaws', 290, 4, 0], ['mine', 298, -0.4], ['cp', 304], ['flow', 316, 0, 3.5, 180, 4], ['bridge', 324], ['croc', 335, -0.8, 0.8, 4, 0], ['mud', 347, 0.3, 3.2], ['gold', 347, 0.5], ['spike', 355, -0.6, 0.9], ['barge', 363, -0.6, 0.6, 6, 0, 2.2], ['saw', 375, -0.8, 0.2, 3.5, 0], ['saw', 382, -0.2, 0.8, 3.5, 0.5], ['cp', 390],
-      ['pool', 400, -0.35, 4, 10], ['geyser', 410, 0.5, 2, 3.5, 0], ['gate', 421, 4.5, 0.5, 0], ['fall', 428], ['bean', 434, 0], ['mine', 440, -0.5], ['mine', 440, 0.5], ['croc', 446, -0.8, 0.8, 3.6, 0]] },
+      ['pool', 400, -0.35, 4, 10], ['geyser', 410, 0.5, 2, 3.5, 0], ['gate', 421, 4.5, 0.5, 0], ['fall', 428], ['bean', 434, 0], ['mine', 440, -0.5], ['mine', 440, 0.5], ['croc', 446, -0.8, 0.8, 3.6, 0],
+      // and, since the first version turned out far too easy:
+      ['spike', 27, -0.5, 0.9], ['croc', 42, -0.8, 0.8, 3.6, 0.5], ['spike', 57, -0.8, 0.8], ['spike', 128, -0.6, 0.6], ['saw', 153, -0.2, 0.9, 2.8, 0.5], ['spike', 190, 0.6, 0.9], ['thorn', 208, -1, -0.5], ['spike', 230, -0.5, 0.9], ['croc', 244, -0.5, 0.9, 3, 0], ['spike', 276, 0.5, 0.9], ['spike', 310, 0.55, 0.6], ['spike', 318, -0.55, 0.6], ['croc', 341, -0.9, 0.2, 2.8, 0.5], ['spike', 369, 0.7, 0.9], ['mine', 386, 0], ['spike', 405, 0.6, 0.9], ['thorn', 414, -1, -0.5], ['spike', 436, 0, 0.8],
+      ['thorn', 84, 0.72, 1], ['thorn', 96, -1, -0.72], ['row', 138, 'thorn', 0.5, 4.6], ['row', 219, 'thorn', 0, 4.4], ['row', 283, 'wall', -0.5, 4.0], ['row', 326, 'wall', 0.5, 4.0]] },
 ];
 
 const BUILT = new Map();
 const SOLID = { rock: 1, bump: 1, wall: 1, reef: 1, thorn: 1, spike: 1, log: 1, croc: 1, saw: 1, ball: 1, barge: 1, mine: 1, gate: 1, isle: 1, mill: 1, jaws: 1, arm: 1, barrel: 1 }, LOW = { rock: 1, bump: 1, reef: 1, log: 1, mill: 1, croc: 1, mine: 1, barge: 1, barrel: 1, spike: 1 }, PASSIVE = { bean: 1, gold: 1, cp: 1, bridge: 1, fall: 1 };
 export function level(i) {
   const k = Math.max(0, Math.min(LEVELS.length - 1, i | 0)); if (BUILT.has(k)) return BUILT.get(k);
-  const def = LEVELS[k], P = [], gaps = []; let x = 0, z = 0, a = -Math.PI/2, w = def.w, wT = def.w, s = 0, open = !!def.sky;
+  const def = LEVELS[k], P = [], gaps = []; let x = 0, z = 0, a = -Math.PI/2, w = slim(def, def.w), wT = w, s = 0, open = !!def.sky;
   const put = () => { w += Math.max(-0.6, Math.min(0.6, wT - w)); P.push({ x: q2(x), z: q2(z), a, w: q2(w), s, open }); };
   put();
   for (const c of def.path) {
-    if (c[0] === 'w') { wT = c[1]; continue; }
+    if (c[0] === 'w') { wT = slim(def, c[1]); continue; }
     if (c[0] === 'rail') { open = !c[1]; P[P.length - 1].open = open; continue; }
     if (c[0] === 's' || c[0] === 'gap') { if (c[0] === 'gap') gaps.push([s, s + c[1]]); const n = Math.round(c[1]/STEP); for (let i = 0; i < n; i++) { x += Math.cos(a)*STEP; z += Math.sin(a)*STEP; s += STEP; put(); } }
     else { const ang = c[1]*Math.PI/180, n = Math.max(1, Math.round(Math.abs(ang)*c[2]/STEP)), da = ang/n;
@@ -109,27 +137,29 @@ export function level(i) {
   // how sharply the river bends at every point (+ to the right), smoothed: the current swings wide on a bend
   for (let i = 0; i < P.length; i++) { const p = P[Math.max(0, i - 1)], q = P[Math.min(P.length - 1, i + 1)]; P[i].k0 = q.s > p.s ? wrap(q.a - p.a)/(q.s - p.s) : 0; }
   for (let i = 0; i < P.length; i++) { let sum = 0, n = 0; for (let j = Math.max(0, i - 3); j <= Math.min(P.length - 1, i + 3); j++) { sum += P[j].k0; n++; } P[i].k = sum/n; }
-  const L = { i: k, id: def.id, name: def.name, theme: def.theme, sky: !!def.sky, par: def.par, tip: def.tip, P, len: s, flow: def.flow || 2.6, w0: def.w, bend: def.sky ? 0.9 : 1.6, gaps };
+  const L = { i: k, id: def.id, name: def.name, theme: def.theme, sky: !!def.sky, par: def.par, tip: def.tip, P, len: s, flow: def.flow || 2.6, w0: slim(def, def.w), bend: def.sky ? 0.9 : 1.6, gaps };
   // the middle of the river at s, the direction it runs there and its half-width
   const mid = (sv) => { const j = Math.max(0, Math.min(P.length - 2, Math.floor(sv/STEP))), t = sv/STEP - j, p = P[j], p2 = P[j + 1], d = Math.hypot(p2.x - p.x, p2.z - p.z) || 1; return { x: p.x + (p2.x - p.x)*t, z: p.z + (p2.z - p.z)*t, tx: (p2.x - p.x)/d, tz: (p2.z - p.z)/d, w: p.w + (p2.w - p.w)*t }; };
   L.at = (sv, lat) => { const m = mid(sv); return [q2(m.x - m.tz*lat), q2(m.z + m.tx*lat)]; };
   L.mid = mid;
   L.zones = []; L.solids = []; L.beans = []; L.golds = []; L.cps = []; L.mines = []; L.falls = []; L.all = [];
-  for (const o of def.obs) { const t = o[0], m = mid(o[1]), b = { t, s: o[1], cx: m.x, cz: m.z, tx: m.tx, tz: m.tz, rx: -m.tz, rz: m.tx, w: m.w, reach: 12 };
+  // ['row', s, kind, across, metres]: a pier of that kind from bank to bank with one gap of so many metres in it
+  const obs = []; for (const o of def.obs) { if (o[0] !== 'row') { obs.push(o); continue; } const m = mid(o[1]), g = o[4]/2, c = o[3]*(m.w - g - 0.3); if (c - g > -m.w + 0.4) obs.push([o[2], o[1], -1, (c - g)/m.w]); if (c + g < m.w - 0.4) obs.push([o[2], o[1], (c + g)/m.w, 1]); }
+  for (const o of obs) { const t = o[0], m = mid(o[1]), b = { t, s: o[1], cx: m.x, cz: m.z, tx: m.tx, tz: m.tz, rx: -m.tz, rz: m.tx, w: m.w, reach: 12 };
     const pt = (f, r) => { b.lat = f*(m.w - (r || 0) - 0.2); b.x = q2(b.cx + b.rx*b.lat); b.z = q2(b.cz + b.rz*b.lat); };
     if (t === 'rock' || t === 'bump' || t === 'spike') { b.r = o[3]; pt(o[2], b.r); }
     else if (t === 'wall' || t === 'reef' || t === 'thorn') { b.l0 = o[2]*m.w; b.l1 = o[3]*m.w; b.x0 = b.cx + b.rx*b.l0; b.z0 = b.cz + b.rz*b.l0; b.x1 = b.cx + b.rx*b.l1; b.z1 = b.cz + b.rz*b.l1; b.th = t === 'reef' ? 0.45 : 0.3; }
     else if (t === 'log' || t === 'mill') { pt(o[2], 0); b.hl = o[3]; b.sp = o[4]; b.ph = o[5]; }
     else if (t === 'isle') { b.r = o[4]; b.s = (o[1] + o[2])/2; b.reach = (o[2] - o[1])/2 + 12; b.pts = []; for (let sv = o[1]; sv <= o[2] + 0.01; sv += 2.5) { const q = mid(sv), lat = o[3]*(q.w - b.r - 0.2); b.pts.push([q2(q.x - q.tz*lat), q2(q.z + q.tx*lat), sv]); } }
     else if (t === 'jaws') { b.per = o[2]; b.ph = o[3]; b.g0 = 0.2; b.g1 = m.w - 0.9; b.th = 0.4; }
-    else if (t === 'arm') { b.side = o[2]; b.len = o[3]; b.per = o[4]; b.ph = o[5]; b.px = b.cx + b.rx*b.side*(m.w - 0.1); b.pz = b.cz + b.rz*b.side*(m.w - 0.1); b.th = 0.45; }
+    else if (t === 'arm') { b.side = o[2]; b.len = o[3]; b.per = o[4]*QUICK; b.ph = o[5]; b.px = b.cx + b.rx*b.side*(m.w - 0.1); b.pz = b.cz + b.rz*b.side*(m.w - 0.1); b.th = 0.45; }
     else if (t === 'barrel') { b.r = 0.8; b.per = o[4]; b.ph = o[5]; b.s0 = o[1]; b.s = (o[1] + o[2])/2; b.reach = (o[2] - o[1])/2 + 12; b.len = o[2] - o[1]; b.path = []; for (let sv = o[1]; sv <= o[2] + 0.01; sv += 1) { const q = mid(sv), lat = o[3]*(q.w - b.r - 0.2); b.path.push([q.x - q.tz*lat, q.z + q.tx*lat]); } }
-    else if (t === 'croc' || t === 'saw') { b.r = t === 'croc' ? 0.85 : 0.8; b.l0 = o[2]*(m.w - b.r); b.l1 = o[3]*(m.w - b.r); b.per = o[4]; b.ph = o[5]; }
-    else if (t === 'ball') { b.r = 0.55; b.dir = o[2]; b.per = o[3]; b.ph = o[4]; b.fly = 1.5; }
-    else if (t === 'barge') { b.hl = o[6]; b.th = 0.85; b.l0 = o[2]*(m.w - 1); b.l1 = o[3]*(m.w - 1); b.per = o[4]; b.ph = o[5]; }
+    else if (t === 'croc' || t === 'saw') { b.r = t === 'croc' ? 0.85 : 0.8; b.l0 = o[2]*(m.w - b.r); b.l1 = o[3]*(m.w - b.r); b.per = o[4]*QUICK; b.ph = o[5]; }
+    else if (t === 'ball') { b.r = 0.55; b.dir = o[2]; b.per = o[3]*QUICK; b.ph = o[4]; b.fly = 1.5; }
+    else if (t === 'barge') { b.hl = o[6]; b.th = 0.85; b.l0 = o[2]*(m.w - 1); b.l1 = o[3]*(m.w - 1); b.per = o[4]*QUICK; b.ph = o[5]; }
     else if (t === 'mine') { b.r = 0.6; pt(o[2], b.r); b.k = L.mines.length; L.mines.push(b); }
     else if (t === 'gate') { b.per = o[2]; b.open = o[3]; b.ph = o[4]; b.x0 = b.cx - b.rx*m.w; b.z0 = b.cz - b.rz*m.w; b.x1 = b.cx + b.rx*m.w; b.z1 = b.cz + b.rz*m.w; b.th = 0.3; }
-    else if (t === 'pool') { b.r = o[3]; b.k = o[4]; pt(o[2], b.r*0.5); }
+    else if (t === 'pool') { b.r = o[3]; b.k = o[4]*1.3; pt(o[2], b.r*0.5); }
     else if (t === 'flow') { b.r = o[3]; pt(o[2], 0); const an = o[4]*Math.PI/180, c = Math.cos(an), sn = Math.sin(an); b.fx = (b.tx*c + b.rx*sn)*o[5]; b.fz = (b.tz*c + b.rz*sn)*o[5]; b.ang = o[4]; }
     else if (t === 'mud' || t === 'oil') { b.r = o[3]; pt(o[2], b.r*0.5); }
     else if (t === 'geyser') { b.r = o[3]; b.per = o[4]; b.ph = o[5]; pt(o[2], b.r*0.6); b.k = L.all.length; }
@@ -229,7 +259,7 @@ export function step(S) {
   if (air) { wx = wz = 0; kd = 0.2; kw = 0.45; }
   else for (const o of L.zones) { if (o.s - S.s > o.reach || S.s - o.s > o.reach) continue; const dx = o.x - S.x, dz = o.z - S.z, d = Math.hypot(dx, dz); if (d >= o.r) continue;
     if (o.t === 'flow') { wx += o.fx; wz += o.fz; }
-    else if (o.t === 'pool') { const k = 1 - d/o.r; if (d > 0.01) { ax += dx/d*o.k*k; az += dz/d*o.k*k; wx += -dz/d*3.2*k; wz += dx/d*3.2*k; } al += 3.2*k; if (d < 0.9) sink(S, 'pool'); }
+    else if (o.t === 'pool') { const k = 1 - d/o.r; if (d > 0.01) { ax += dx/d*o.k*k; az += dz/d*o.k*k; wx += -dz/d*3.2*k; wz += dx/d*3.2*k; } al += 3.2*k; if (d < 1.2) sink(S, 'pool'); }
     else if (o.t === 'mud') { kd = 4.6; kw = 4; }
     else if (o.t === 'oil') { kd = 0.16; kw = 0.3; }
     else if (o.t === 'geyser') { if (geyserAt(o, tm) < 0.14 && S.safe <= 0) { S.air = AIR_T*0.85; const nx = d > 0.2 ? -dx/d : loc.tx, nz = d > 0.2 ? -dz/d : loc.tz; S.vx += nx*4.5; S.vz += nz*4.5; S.w += (o.k % 2 ? 6 : -6); S.ev.push({ t: 'geyser' }); } }
@@ -297,6 +327,8 @@ export function load(S, o) {
 // future on a copy of the river and takes the one that gets furthest in one piece. Used to prove every river can be
 // run, behind the menu, and to stand in for a friend whose phone dropped out (`only` limits it to those people).
 const PLANS = []; for (const lat of [-0.85, -0.55, -0.25, 0, 0.25, 0.55, 0.85]) PLANS.push({ lat, go: 1 }); for (const lat of [-0.5, 0, 0.5]) PLANS.push({ lat, go: 0 });
+// a dog-leg: one side first, then the other. Tried only when no straight line gets through.
+const LEGS = []; for (const lat of [-0.85, -0.4, 0, 0.4, 0.85]) for (const l2 of [-0.85, -0.4, 0, 0.4, 0.85]) if (l2 !== lat) LEGS.push({ lat, go: 1, sw: 25, then: { lat: l2, go: 1 } });
 function drive(S, plan, only) {
   const L = S.L, loc = locate(L, S.x, S.z, S.hint), sp = Math.hypot(S.vx, S.vz), ahead = Math.min(L.len + 4, loc.s + 5 + sp*0.5), m = L.mid(ahead), w = Math.max(0.5, m.w - RR - (loc.open ? 1.3 : 0.35));
   // the speed we would like, as an arrow; push towards whatever is missing from the speed we have
@@ -308,11 +340,12 @@ export function pilot(S, only) {
   if (S.ph !== 'run' || S.dead > 0) { S.crew.forEach((c, k) => { if (!only || only.includes(k)) c.on = false; }); return; }
   if (!S.plan || S.tick >= (S.planAt || 0)) { const T = S.scratch || (S.scratch = newRun(S.lv, S.n)), base = save(S), gold0 = goldCount(S); let best = null, bs = -1e9;
     // held up behind something: look further ahead, the way round may take a while
-    if (S.tick - (S.markT || 0) >= 45) { S.stuck = Math.abs(S.s - (S.markS == null ? -99 : S.markS)) < 2.5; S.markT = S.tick; S.markS = S.s; } const far = S.stuck ? 190 : 80;
-    for (const p of PLANS) { load(T, base); let score = 0, i = 0; const b0 = T.bumps, beans0 = bitsOf(T.beans);
-      for (; i < far; i++) { drive(T, p); step(T); if (T.dead > 0) { score -= 400 - i*3; break; } if (T.ph === 'done') { score += 60; break; } }
+    if (S.tick - (S.markT || 0) >= 45) { S.stuck = Math.abs(S.s - (S.markS == null ? -99 : S.markS)) < 2.5; S.markT = S.tick; S.markS = S.s; } const far = S.stuck ? 170 : 80;
+    for (let pass = 0; pass < 2; pass++) { if (pass && bs > -100 && !S.stuck) break;
+    for (const p of pass ? LEGS : PLANS) { load(T, base); let score = 0, i = 0; const b0 = T.bumps, beans0 = bitsOf(T.beans);
+      for (; i < far; i++) { drive(T, p.then && i >= p.sw ? p.then : p); step(T); if (T.dead > 0) { score -= 400 - i*3; break; } if (T.ph === 'done') { score += 60; break; } }
       score += (T.dead > 0 ? 0 : T.s - S.s) - (T.bumps - b0)*(S.stuck ? 0 : 3) + (S.stuck && T.dead <= 0 ? 0.6*Math.hypot(T.x - S.x, T.z - S.z) : 0) + (goldCount(T) - gold0)*9 + (bitsOf(T.beans) !== beans0 ? 4 : 0) + (p === S.plan ? 1.2 : 0) - (S.stuck ? 0 : Math.abs(p.lat)*0.5);
-      if (score > bs) { bs = score; best = p; } }
+      if (score > bs) { bs = score; best = p; } } }
     S.plan = best; S.planAt = S.tick + 5; }
   drive(S, S.plan, only);
 }
