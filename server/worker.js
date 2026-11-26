@@ -65,14 +65,14 @@ export class Room {
     this.watch.delete(ws); const me = this.crew.find((m) => m.id === id && m.ws === ws); if (!me) return;
     me.ws = null; if (this.ph === 'bank' || this.seatOf(id) < 0) this.crew = this.crew.filter((m) => m !== me);
     if (this.ph === 'bank') { const ws2 = this.watch.values().next().value; if (ws2 && this.crew.length < G.MAXP) { this.watch.delete(ws2); this.crew.push({ id: ws2.uid, name: ws2.nm || 'Игрок', ws: ws2 }); } }
-    else { const k = this.seatOf(id); if (k >= 0 && this.S) G.input(this.S, k, 0); }
+    else { const k = this.seatOf(id); if (k >= 0 && this.S) G.input(this.S, k, null, false); }
     this.tellRoom();
   }
   onMsg(ws, id, m) {
     if (!m || typeof m.t !== 'string') return; ws.hb = Date.now();
     if (m.t === 'p') { if (this.ph !== 'run') this.sweep(); return this.send(ws, { t: 'q', c: m.c }); }
     const cap = this.captain(), isCap = !!cap && cap.id === id, k = this.seatOf(id);
-    if (m.t === 'i') { if (this.ph === 'run' && k >= 0 && this.S) G.input(this.S, k, m.b & 3); return; }
+    if (m.t === 'i') { if (this.ph === 'run' && k >= 0 && this.S) G.input(this.S, k, typeof m.a === 'number' ? m.a/100 : null, !!m.f); return; }
     if (!isCap) return;
     if (m.t === 'lv' && this.ph === 'bank') { this.lv = Math.max(0, Math.min(G.LEVELS.length - 1, m.lv | 0)); this.tellRoom(); }
     else if (m.t === 'go' && this.ph !== 'run') { if (Number.isInteger(m.lv)) this.lv = Math.max(0, Math.min(G.LEVELS.length - 1, m.lv)); this.begin(); }

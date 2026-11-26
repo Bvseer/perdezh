@@ -44,11 +44,17 @@
   .fart.on { transform: translateY(5px) scale(.95); box-shadow: 0 2px 0 var(--ink); filter: brightness(1.18) saturate(1.2); }
   .fart.dry { animation: dry .25s linear infinite; filter: saturate(.4); }
   @keyframes dry { 25% { margin-left: -3px; } 75% { margin-left: 3px; } }
-  #bL { left: 18px; } #bR { right: 18px; --c: var(--blue); } #bOne { left: 50%; margin-left: -76px; width: 152px; height: 152px; font-size: 50px; }
+  #bFart { right: 18px; width: 136px; height: 136px; font-size: 44px; }
+  #stickZone { pointer-events: auto; position: absolute; left: 0; bottom: 0; width: 58%; height: 46%; touch-action: none; }
+  #stickHint { position: absolute; left: 16px; bottom: calc(60px + env(safe-area-inset-bottom)); width: 132px; height: 132px; border-radius: 50%; border: 4px dashed rgba(67,38,15,.45); background: rgba(255,246,220,.28); display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; padding: 14px; color: var(--ink); }
+  #joy { position: fixed; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 4px solid var(--ink); background: rgba(255,246,220,.55); display: none; pointer-events: none; }
+  #joy.on { display: block; } #joy.on ~ #bFart { } #pad:has(#joy.on) #stickHint { opacity: 0; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: var(--gas); border: 4px solid var(--ink); box-shadow: 0 4px 0 var(--ink); }
+  #vig { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(20,30,60,.28) 100%); }
   #pop { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 900 64px Rubik, sans-serif; color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 0 6px 0 var(--ink); opacity: 0; }
   #pop.go { animation: pop .9s ease-out; }
   @keyframes pop { 0% { opacity: 0; transform: scale(.4) rotate(-8deg); } 18% { opacity: 1; transform: scale(1.15) rotate(3deg); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.1) translateY(-20px); } }
-  #hint { position: absolute; left: 14px; right: 14px; bottom: calc(190px + env(safe-area-inset-bottom)); text-align: center; background: rgba(255,246,220,.94); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 10px; font-size: 14px; }
+  #hint { position: absolute; left: 14px; right: 14px; top: calc(86px + env(safe-area-inset-top)); text-align: center; background: rgba(255,246,220,.94); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 10px; font-size: 14px; }
   #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 12px; padding: 9px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 86%; text-align: center; z-index: 9; }
   #toast.on { opacity: 1; }
 
@@ -97,6 +103,7 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div id="vig"></div>
 
 <div id="hud">
   <div id="top">
@@ -110,9 +117,11 @@
   <div id="crew"></div>
   <div id="pop"></div>
   <div id="hint" class="hide"></div>
-  <div class="fart" id="bL">💨<small>ЛЕВЫЙ</small></div>
-  <div class="fart" id="bR">💨<small>ПРАВЫЙ</small></div>
-  <div class="fart hide" id="bOne">💨<small>ПУК!</small></div>
+  <div id="pad">
+    <div id="stickZone"><div id="stickHint">🕹️ веди пальцем — куда лететь</div></div>
+    <div id="joy"><div id="knob"></div></div>
+    <div class="fart" id="bFart">💨<small>ПУК!</small></div>
+  </div>
 </div>
 
 <div class="screen on" id="home">
@@ -121,11 +130,12 @@
   <div id="levels"></div>
   <div class="row"><div class="btn blue" id="goFriends">👥 С друзьями</div></div>
   <div class="card" id="how">
-    <p><b>Каждый пукает со своей стороны.</b> Пукнул левый — плот заносит вправо. Пукнул правый — влево.</p>
-    <p><b>Вместе — прямо.</b> Нажали одновременно — <b>ЗАЛП</b>, плот летит в полтора раза быстрее.</p>
+    <p><b>Плот круглый, ты бегаешь по краю.</b> Джойстиком показываешь, куда лететь — человечек встаёт с другой стороны. Жмёшь <b>ПУК</b> — плот летит туда.</p>
+    <p><b>С друзьями</b> у каждого свой человечек. Встали с одной стороны и пукнули разом — <b>ЗАЛП</b>, в полтора раза быстрее. Встали напротив — стоите на месте.</p>
+    <p><b>Плот закрутило</b> — вас уносит вместе с ним: пока добежишь обратно, пукаешь не туда.</p>
     <p><b>Газ кончается.</b> Отпусти — накопится. Банка фасоли 🥫 заправляет всех и даёт турбо.</p>
     <p><b>Три звезды:</b> доплыть, уложиться во время и собрать три золотых рулона 🧻. Утонул — начинаешь с последнего чекпойнта.</p>
-    <p>Одному: две кнопки на экране или <b>A / D</b>, обе сразу — <b>W</b> или пробел.</p>
+    <p>На компьютере: стрелки или <b>WASD</b>, пук — <b>пробел</b>.</p>
   </div>
   <div id="ver"></div>
 </div>
@@ -157,6 +167,6 @@
 </div>
 
 <div id="toast"></div>
-<script type="module" src="./game.js?v=0.4"></script>
+<script type="module" src="./game.js?v=0.5"></script>
 </body>
 </html>
