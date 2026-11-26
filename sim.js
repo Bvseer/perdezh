@@ -1,7 +1,7 @@
 // Пердёж-балдёж: one raft, several jets. The whole game in one place: the server runs it for a room of friends,
 // the phone runs it when you play alone. Everything is fixed-step and has no randomness, so a run is repeatable.
 
-export const VERSION = '0.2';   // one number for the page and the server
+export const VERSION = '0.3';   // one number for the page and the server
 export const DT = 1/30;         // seconds a step
 export const RR = 1.25;         // the raft, for bumping into things, is a disc this big
 export const MAXP = 4;

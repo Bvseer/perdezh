@@ -1,6 +1,6 @@
 // Пердёж-балдёж — what you see and touch. The rules of the river live in sim.js (the server runs the same file).
 import * as THREE from 'three';
-import * as G from './sim.js?v=0.2';
+import * as G from './sim.js?v=0.3';
 
 const $ = (id) => document.getElementById(id);
 const TG = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
@@ -116,20 +116,22 @@ function buildLevel(i) {
 const HEAD = 0.29, SPH = new THREE.SphereGeometry(1, 16, 12), HALF = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI*2, 0, Math.PI/2);
 const smooth = (c) => new THREE.MeshLambertMaterial({ color: c });
 const ball = (mat, r, x, y, z, sx, sy, sz) => { const m = new THREE.Mesh(SPH, mat); m.scale.set(r*(sx || 1), r*(sy || 1), r*(sz || 1)); m.position.set(x, y, z); return m; };
-function pantsTex(k) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d'); c.fillStyle = PCOL[k]; c.fillRect(0, 0, 128, 128); c.fillStyle = '#fff'; c.strokeStyle = '#fff';
+function pantsTex(k, skinHex) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d'); c.fillStyle = PCOL[k]; c.fillRect(0, 0, 128, 128); c.fillStyle = '#fff'; c.strokeStyle = '#fff';
   if (k === 0) for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const px = x*32 + (y % 2)*16 + 8, py = y*32 + 12; c.beginPath(); c.moveTo(px, py + 9); c.bezierCurveTo(px - 13, py - 2, px - 5, py - 10, px, py - 3); c.bezierCurveTo(px + 5, py - 10, px + 13, py - 2, px, py + 9); c.fill(); }   // hearts
   else if (k === 1) for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) { c.beginPath(); c.arc(x*26 + (y % 2)*13 + 8, y*26 + 10, 6, 0, 7); c.fill(); }   // dots
   else if (k === 2) { c.fillStyle = '#e8552f'; for (let x = 0; x < 8; x++) c.fillRect(x*16, 0, 7, 128); }   // stripes
   else for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const px = x*32 + (y % 2)*16 + 10, py = y*32 + 14; c.beginPath(); for (let i = 0; i < 10; i++) { const a = i*Math.PI/5 - Math.PI/2, r = i % 2 ? 4 : 10; c.lineTo(px + Math.cos(a)*r, py + Math.sin(a)*r); } c.fill(); }   // stars
+  // the pants have slipped: bare skin above the waistband, with the crack down the middle
+  const sk = new THREE.Color(skinHex), dk = '#' + sk.clone().multiplyScalar(0.72).getHexString(); c.fillStyle = skinHex; c.fillRect(0, 0, 128, 40); c.fillStyle = dk; c.fillRect(0, 6, 2.5, 34); c.fillRect(125.5, 6, 2.5, 34); c.fillStyle = '#fff'; c.fillRect(0, 38, 128, 9);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1); return t; }
 const BUILD = [{ fat: 1.18, tall: 0.95, head: 1.0 }, { fat: 0.88, tall: 1.12, head: 0.95 }, { fat: 1.05, tall: 1.0, head: 1.05 }, { fat: 0.92, tall: 0.9, head: 1.2 }];
 function buildGuy(k, off, n) {
   const c = new THREE.Group(), B = BUILD[k], col = new THREE.Color(PCOL[k]), size = n <= 2 ? 1.3 : n === 3 ? 1.12 : 0.95;
   c.position.set(-0.78 + (n === 4 && Math.abs(off) < 0.5 ? 0.3 : 0), 0.24, off*0.82); c.scale.setScalar(size);
-  const skin = smooth(['#ffd7ae', '#f3c69a', '#ffe0c0', '#e9b98c'][k]), shirt = smooth(col.clone().lerp(new THREE.Color('#ffffff'), 0.6)), ink = MAT.black, white = smooth('#ffffff');
+  const skinHex = ['#ffd7ae', '#f3c69a', '#ffe0c0', '#e9b98c'][k], skin = smooth(skinHex), shirt = smooth(col.clone().lerp(new THREE.Color('#ffffff'), 0.6)), ink = MAT.black, white = smooth('#ffffff');
   // the back end, in loud underpants
-  const bum = new THREE.Group(); bum.position.set(-0.2, 0.44*B.tall, 0); const cheeks = ball(new THREE.MeshLambertMaterial({ map: pantsTex(k) }), 0.31, 0, 0, 0, 0.95*B.fat, 0.92, 1.16*B.fat); cheeks.rotation.y = Math.PI/2; bum.add(cheeks);
-  { const band = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.045, 6, 18), white); band.rotation.y = Math.PI/2; band.rotation.x = 0; band.position.set(0.13, 0.05, 0); band.scale.set(1.12*B.fat, 0.9, 1); bum.add(band); }   // waistband
+  const bum = new THREE.Group(); bum.position.set(-0.2, 0.44*B.tall, 0); const cheeks = ball(new THREE.MeshLambertMaterial({ map: pantsTex(k, skinHex) }), 0.31, 0, 0, 0, 0.95*B.fat, 0.92, 1.16*B.fat); cheeks.rotation.z = -0.85; bum.add(cheeks);
+
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2*B.fat, 0.26, 6, 12), shirt); body.rotation.z = -1.2; body.position.set(0.1, 0.5*B.tall, 0);
   const feet = [-1, 1].map((s) => ball(MAT.dark, 0.09, -0.12, 0.09, s*0.24*B.fat, 1.6, 0.7, 1));
   // arms: pivot at the shoulder, hand at the end
@@ -152,7 +154,7 @@ function buildGuy(k, off, n) {
     const tooth = new THREE.Mesh(new THREE.BoxGeometry(R*0.1, R*0.22, R*0.22), white); tooth.position.set(R*0.95, -R*0.52, 0); tilt.add(tooth); }
   else { const cap = new THREE.Mesh(HALF, smooth(col)); cap.scale.setScalar(R*1.06); cap.position.y = R*0.15; const stem = new THREE.Mesh(new THREE.CylinderGeometry(R*0.06, R*0.06, R*0.5, 6), ink); stem.position.y = R*1.35;
     spin = new THREE.Group(); spin.position.y = R*1.6; for (const a of [0, Math.PI/2]) { const bl = new THREE.Mesh(new THREE.BoxGeometry(R*1.5, R*0.05, R*0.3), smooth('#ffcf33')); bl.rotation.y = a; spin.add(bl); } tilt.add(cap, stem, spin);   // propeller beanie
-    tilt.add(ball(smooth('#ff6a8a'), R*0.2, R*1.0, -R*0.5, 0)); }   // a dummy in the mouth
+    tilt.add(ball(smooth('#eeeeee'), R*0.55, R*0.62, -R*0.72, 0, 0.9, 0.85, 1.25)); }   // a white beard
   c.add(bum, body, ...feet, ...arms, neck);
   return { c, off, k, B, size, bum, body, arms, neck, tilt, eyes, puff, mouth, skull, skin, spin, base: skin.color.clone(), side: off > 0.01 ? -1 : 1, puffAcc: 0, f: 0, dry: 0, strain: 0, yaw: 0, hop: 0, vy: 0, shock: 0, cheer: 0, party: false, was: false, look: Math.random()*9 };
 }
