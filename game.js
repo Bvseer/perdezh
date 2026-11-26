@@ -1,6 +1,6 @@
 // Пердёж-балдёж — what you see and touch. The rules of the river live in sim.js (the server runs the same file).
 import * as THREE from 'three';
-import * as G from './sim.js?v=0.1';
+import * as G from './sim.js?v=0.2';
 
 const $ = (id) => document.getElementById(id);
 const TG = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
@@ -112,7 +112,82 @@ function buildLevel(i) {
   scene.add(g); return LV = { L, g, logs, beans, rings };
 }
 
-// ---------- the raft and its crew ----------
+// ---------- the crew: four different characters, each bent over with the business end pointing back ----------
+const HEAD = 0.29, SPH = new THREE.SphereGeometry(1, 16, 12), HALF = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI*2, 0, Math.PI/2);
+const smooth = (c) => new THREE.MeshLambertMaterial({ color: c });
+const ball = (mat, r, x, y, z, sx, sy, sz) => { const m = new THREE.Mesh(SPH, mat); m.scale.set(r*(sx || 1), r*(sy || 1), r*(sz || 1)); m.position.set(x, y, z); return m; };
+function pantsTex(k) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d'); c.fillStyle = PCOL[k]; c.fillRect(0, 0, 128, 128); c.fillStyle = '#fff'; c.strokeStyle = '#fff';
+  if (k === 0) for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const px = x*32 + (y % 2)*16 + 8, py = y*32 + 12; c.beginPath(); c.moveTo(px, py + 9); c.bezierCurveTo(px - 13, py - 2, px - 5, py - 10, px, py - 3); c.bezierCurveTo(px + 5, py - 10, px + 13, py - 2, px, py + 9); c.fill(); }   // hearts
+  else if (k === 1) for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) { c.beginPath(); c.arc(x*26 + (y % 2)*13 + 8, y*26 + 10, 6, 0, 7); c.fill(); }   // dots
+  else if (k === 2) { c.fillStyle = '#e8552f'; for (let x = 0; x < 8; x++) c.fillRect(x*16, 0, 7, 128); }   // stripes
+  else for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const px = x*32 + (y % 2)*16 + 10, py = y*32 + 14; c.beginPath(); for (let i = 0; i < 10; i++) { const a = i*Math.PI/5 - Math.PI/2, r = i % 2 ? 4 : 10; c.lineTo(px + Math.cos(a)*r, py + Math.sin(a)*r); } c.fill(); }   // stars
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1); return t; }
+const BUILD = [{ fat: 1.18, tall: 0.95, head: 1.0 }, { fat: 0.88, tall: 1.12, head: 0.95 }, { fat: 1.05, tall: 1.0, head: 1.05 }, { fat: 0.92, tall: 0.9, head: 1.2 }];
+function buildGuy(k, off, n) {
+  const c = new THREE.Group(), B = BUILD[k], col = new THREE.Color(PCOL[k]), size = n <= 2 ? 1.3 : n === 3 ? 1.12 : 0.95;
+  c.position.set(-0.78 + (n === 4 && Math.abs(off) < 0.5 ? 0.3 : 0), 0.24, off*0.82); c.scale.setScalar(size);
+  const skin = smooth(['#ffd7ae', '#f3c69a', '#ffe0c0', '#e9b98c'][k]), shirt = smooth(col.clone().lerp(new THREE.Color('#ffffff'), 0.6)), ink = MAT.black, white = smooth('#ffffff');
+  // the back end, in loud underpants
+  const bum = new THREE.Group(); bum.position.set(-0.2, 0.44*B.tall, 0); const cheeks = ball(new THREE.MeshLambertMaterial({ map: pantsTex(k) }), 0.31, 0, 0, 0, 0.95*B.fat, 0.92, 1.16*B.fat); cheeks.rotation.y = Math.PI/2; bum.add(cheeks);
+  { const band = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.045, 6, 18), white); band.rotation.y = Math.PI/2; band.rotation.x = 0; band.position.set(0.13, 0.05, 0); band.scale.set(1.12*B.fat, 0.9, 1); bum.add(band); }   // waistband
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2*B.fat, 0.26, 6, 12), shirt); body.rotation.z = -1.2; body.position.set(0.1, 0.5*B.tall, 0);
+  const feet = [-1, 1].map((s) => ball(MAT.dark, 0.09, -0.12, 0.09, s*0.24*B.fat, 1.6, 0.7, 1));
+  // arms: pivot at the shoulder, hand at the end
+  const arms = [-1, 1].map((s) => { const a = new THREE.Group(); a.position.set(0.3, 0.52*B.tall, s*0.2*B.fat); const up = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.26, 4, 8), shirt); up.position.y = -0.16; a.add(up, ball(skin, 0.075, 0, -0.34, 0)); a.rotation.z = 0.45; return a; });
+  // the head: turns round to look at you when its owner is pushing
+  const neck = new THREE.Group(), tilt = new THREE.Group(), R = HEAD*B.head; neck.position.set(0.4, 0.84*B.tall, 0); neck.add(tilt);
+  const skull = ball(skin, R, 0, 0, 0, 1, 0.96, 1.02); tilt.add(skull, ball(skin, R*0.24, 0, 0, R*1.0), ball(skin, R*0.24, 0, 0, -R*1.0));
+  const eyes = [-1, 1].map((s) => { const e = new THREE.Group(); e.position.set(R*0.8, R*0.25, s*R*0.42); e.add(ball(white, R*0.36, 0, 0, 0), ball(ink, R*0.17, R*0.26, 0, 0)); tilt.add(e); return e; });
+  const puff = [-1, 1].map((s) => { const m = ball(smooth('#ff9d9d'), R*0.3, R*0.72, -R*0.3, s*R*0.62); tilt.add(m); return m; });
+  tilt.add(ball(smooth('#f0a98a'), R*0.2, R*1.0, -R*0.05, 0));   // nose
+  const mouth = ball(ink, R*0.16, R*0.9, -R*0.5, 0, 0.5, 0.6, 1.5); tilt.add(mouth);
+  let spin = null;
+  if (k === 0) { const cap = new THREE.Mesh(HALF, smooth(col)); cap.scale.setScalar(R*1.06); cap.position.y = R*0.12; const visor = new THREE.Mesh(new THREE.BoxGeometry(R*1.0, R*0.12, R*1.3), cap.material); visor.position.set(-R*1.2, R*0.2, 0); tilt.add(cap, visor);   // cap worn backwards
+    const mo = new THREE.Mesh(new THREE.BoxGeometry(R*0.14, R*0.16, R*0.95), ink); mo.position.set(R*0.98, -R*0.26, 0); tilt.add(mo); }   // moustache
+  else if (k === 1) { const pot = new THREE.Mesh(new THREE.CylinderGeometry(R*1.0, R*1.0, R*0.85, 16), smooth(col)); pot.position.y = R*0.75; const rim = new THREE.Mesh(new THREE.CylinderGeometry(R*1.08, R*1.08, R*0.12, 16), white); rim.position.y = R*0.36;
+    const hd = new THREE.Mesh(new THREE.BoxGeometry(R*0.14, R*0.12, R*1.3), ink); hd.position.set(0, R*0.8, R*1.5); tilt.add(pot, rim, hd);   // a saucepan for a helmet
+    for (const s of [-1, 1]) { const gl = new THREE.Mesh(new THREE.TorusGeometry(R*0.4, R*0.06, 6, 14), ink); gl.rotation.y = Math.PI/2; gl.position.set(R*0.86, R*0.25, s*R*0.42); tilt.add(gl); } }   // glasses
+  else if (k === 2) { const brim = new THREE.Mesh(new THREE.CylinderGeometry(R*1.75, R*1.75, R*0.1, 18), smooth('#f6d868')); brim.position.y = R*0.6; const top = new THREE.Mesh(new THREE.CylinderGeometry(R*0.8, R*0.9, R*0.7, 14), brim.material); top.position.y = R*0.95;
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(R*0.92, R*0.92, R*0.2, 14), smooth('#e8552f')); band.position.y = R*0.74; tilt.add(brim, top, band);   // straw hat
+    const tooth = new THREE.Mesh(new THREE.BoxGeometry(R*0.1, R*0.22, R*0.22), white); tooth.position.set(R*0.95, -R*0.52, 0); tilt.add(tooth); }
+  else { const cap = new THREE.Mesh(HALF, smooth(col)); cap.scale.setScalar(R*1.06); cap.position.y = R*0.15; const stem = new THREE.Mesh(new THREE.CylinderGeometry(R*0.06, R*0.06, R*0.5, 6), ink); stem.position.y = R*1.35;
+    spin = new THREE.Group(); spin.position.y = R*1.6; for (const a of [0, Math.PI/2]) { const bl = new THREE.Mesh(new THREE.BoxGeometry(R*1.5, R*0.05, R*0.3), smooth('#ffcf33')); bl.rotation.y = a; spin.add(bl); } tilt.add(cap, stem, spin);   // propeller beanie
+    tilt.add(ball(smooth('#ff6a8a'), R*0.2, R*1.0, -R*0.5, 0)); }   // a dummy in the mouth
+  c.add(bum, body, ...feet, ...arms, neck);
+  return { c, off, k, B, size, bum, body, arms, neck, tilt, eyes, puff, mouth, skull, skin, spin, base: skin.color.clone(), side: off > 0.01 ? -1 : 1, puffAcc: 0, f: 0, dry: 0, strain: 0, yaw: 0, hop: 0, vy: 0, shock: 0, cheer: 0, party: false, was: false, look: Math.random()*9 };
+}
+const RED = new THREE.Color('#ff7a66'), BLUE = new THREE.Color('#9aa6ee');
+function guyStep(c, j, run, dt, fire) {
+  const dryNow = j.on && !fire && run; c.f += ((fire ? 1 : 0) - c.f)*Math.min(1, dt*12); c.dry += ((dryNow ? 1 : 0) - c.dry)*Math.min(1, dt*8);
+  c.strain = clamp(c.strain + (fire ? dt*0.7 : -dt*0.9), 0, 1); c.shock = Math.max(0, c.shock - dt); c.cheer = Math.max(0, c.cheer - dt);
+  // hop: knocked up by a bump, or dancing at the finish
+  if (c.party && c.hop <= 0 && c.vy <= 0 && Math.sin(T*7 + c.k*1.9) > 0.9) c.vy = 3.2; c.vy -= 16*dt; c.hop += c.vy*dt; if (c.hop <= 0) { c.hop = 0; c.vy = 0; }
+  const shake = fire ? Math.sin(T*65 + c.k*2)*0.02 : dryNow ? Math.sin(T*40 + c.k)*0.012 : 0;
+  c.c.position.y = 0.24 + c.hop + shake; c.c.rotation.z = -0.22*c.f + Math.sin(T*2 + c.k)*0.02; c.c.rotation.x = c.hop*0.25*c.side;
+  // the back end inflates and flaps while pushing, sags when the tank is dry
+  const pump = 1 + 0.22*c.f - 0.14*c.dry + (fire ? Math.sin(T*48 + c.k)*0.05 : 0) + Math.sin(T*2.6 + c.k)*0.015; c.bum.scale.set(pump, pump*(1 + 0.08*c.f), pump); c.bum.rotation.x = fire ? Math.sin(T*33)*0.12 : Math.sin(T*1.7 + c.k*2)*0.06; c.bum.position.y = 0.44*c.B.tall + 0.1*c.f;
+  // the head: looks back over the shoulder when pushing, cheering or worried; otherwise watches the river
+  c.look += dt; const glance = Math.sin(c.look*0.7 + c.k*3)*0.5 + (Math.sin(c.look*0.23 + c.k) > 0.93 ? 1.2*c.side : 0), back = Math.max(c.f, c.dry, c.party ? 1 : 0, c.shock > 0 ? 0.7 : 0);
+  const wantYaw = back > 0.3 ? c.side*2.75 : glance; c.yaw += (wantYaw - c.yaw)*Math.min(1, dt*(back > 0.3 ? 11 : 4)); c.neck.rotation.y = c.yaw; c.tilt.rotation.z = 0.62*Math.min(1, Math.abs(c.yaw)/2.6) + (fire ? Math.sin(T*55)*0.03 : 0);
+  // the face: squeezed and red when pushing, pop-eyed and blue when empty
+  const squint = c.f*(1 - c.dry), pop = Math.max(c.dry, c.shock > 0 ? 1 : 0); for (const e of c.eyes) e.scale.set(1 + pop*0.25, (1 - 0.72*squint)*(1 + pop*0.35), 1 + pop*0.25);
+  const ch = 1 + 0.9*c.f + 0.25*Math.sin(T*30)*c.f; for (const p of c.puff) p.scale.setScalar(HEAD*c.B.head*0.3*ch);
+  c.mouth.scale.set(HEAD*c.B.head*0.16*0.5, HEAD*c.B.head*0.16*(0.6 + 1.3*Math.max(pop, c.cheer > 0 || c.party ? 1 : 0)), HEAD*c.B.head*0.16*(1.5 - 0.8*squint));
+  c.skin.color.copy(c.base).lerp(RED, 0.75*c.strain*(1 - c.dry)).lerp(BLUE, 0.6*c.dry);
+  // arms: holding on; up in the air for a volley and at the finish
+  const up = c.cheer > 0 || c.party ? 1 : 0; c.arms.forEach((a, i) => { const want = up ? 2.7 + Math.sin(T*14 + i*2 + c.k)*0.3 : 0.45 + 0.25*c.f; a.rotation.z += (want - a.rotation.z)*Math.min(1, dt*12); a.rotation.x = up ? (i ? 1 : -1)*0.35 : 0; });
+  if (c.spin) c.spin.rotation.y += dt*(4 + 40*c.f);
+  const started = fire && !c.was; c.was = fire; return started;
+}
+// little shouts that fly off the raft
+const WORDS = ['ПУК!', 'ПРРР', 'ПШШШ', 'ТР-Р-Р', 'ФУ-У!', 'БДЫЩ', 'ПУ-УК', 'ВЖУХ'], SHOUT = [];
+function shout(x, z, col, word) { if (!SHOUT.length) for (let i = 0; i < 8; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })); s.visible = false; s.renderOrder = 6; scene.add(s); SHOUT.push({ s, life: 0, tex: {} }); }
+  const o = SHOUT.find((q) => q.life <= 0) || SHOUT[0], w = word || WORDS[Math.floor(Math.random()*WORDS.length)], key = w + col; if (!TEX[key]) TEX[key] = label(w, col).material.map;
+  o.s.material.map = TEX[key]; o.s.material.needsUpdate = true; o.life = o.max = 0.9; o.x = x; o.z = z; o.vx = (Math.random() - 0.5)*2; o.s.visible = true; }
+const TEX = {};
+function shoutStep(dt) { for (const o of SHOUT) { if (o.life <= 0) continue; o.life -= dt; if (o.life <= 0) { o.s.visible = false; continue; } const t = 1 - o.life/o.max, k = 1.4 + t*1.6; o.s.position.set(o.x + o.vx*t, 1.4 + t*2.4, o.z); o.s.scale.set(1.9*k, 0.475*k, 1); o.s.material.opacity = t < 0.7 ? 1 : (1 - t)/0.3; } }
+
+// ---------- the raft ----------
 let RAFT = null;
 function label(text, col) { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d'); c.font = '900 34px Rubik, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 8; c.strokeStyle = '#43260f'; c.strokeText(text, 128, 34); c.fillStyle = col; c.fillText(text, 128, 34);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true })); s.scale.set(1.9, 0.475, 1); s.renderOrder = 5; return s; }
@@ -126,16 +201,7 @@ function buildRaft(n, names) {
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.9, 6), MAT.dark); mast.position.set(0.95, 1.2, 0); b.add(mast);
   const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0, 0.55, 0, -0.8, 0.27, 0]), 3)); fg.computeVertexNormals(); const flag = new THREE.Mesh(fg, MAT.flag); flag.position.set(0.95, 1.55, 0); b.add(flag);
   const crate = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.6), MAT.cut), band = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.1, 0.63), MAT.dark); crate.position.set(0.3, 0.62, 0); crate.rotation.y = 0.2; band.position.copy(crate.position); band.rotation.y = 0.2; b.add(crate, band);
-  const offs = G.SEATS[n], crew = offs.map((off, k) => { const c = new THREE.Group(), col = new THREE.Color(PCOL[k]); c.position.set(-0.8, 0.3, off*0.82);
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 9), lam(col, { flatShading: false })); body.scale.set(1, 1.12, 1); body.position.y = 0.4;
-    const bum = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), MAT.jeans); bum.scale.set(1, 0.9, 1.12); bum.position.set(-0.2, 0.24, 0);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 9), MAT.skin); head.position.set(0.05, 0.88, 0);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 6, 0, Math.PI*2, 0, Math.PI/2), lam(col.clone().multiplyScalar(0.8), { flatShading: false })); cap.position.set(0.05, 0.9, 0);
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.035, 0.3), cap.material); visor.position.set(0.28, 0.92, 0);
-    const e1 = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 5), MAT.black), e2 = e1.clone(); e1.position.set(0.25, 0.86, 0.09); e2.position.set(0.25, 0.86, -0.09);
-    c.add(body, bum, head, cap, visor, e1, e2); b.add(c);
-    if (names && names[k]) { const l = label(names[k], PCOL[k]); l.position.set(0, 1.6 + (k % 2)*0.45, 0); c.add(l); }
-    return { c, off, puff: 0, f: 0 }; });
+  const crew = G.SEATS[n].map((off, k) => { const c = buildGuy(k, off, n); b.add(c.c); if (names && names[k]) { const l = label(names[k], PCOL[k]); l.position.set(0.1, 1.5 + (k % 2)*0.4, 0); c.c.add(l); } return c; });
   scene.add(g); return RAFT = { g, b, crew, flag };
 }
 
@@ -189,9 +255,9 @@ function begin(mode, lv, n, names, seat) {
   const h = $('hint'); if (play && (two ? !BEST[G.LEVELS[0].id] : true)) { h.textContent = two ? 'Левая кнопка — пукает левый, и плот несёт ВПРАВО. Правая — влево. Обе сразу — прямо!' : seat >= 0 ? 'Твой человечек — ' + PNAME[seat] + '. Пукаешь один — плот крутит. Жмите вместе — летит прямо!' : 'Мест на плоту нет — смотришь заплыв. В следующий возьмут.'; h.classList.remove('hide'); RUN.hintT = 9; } else h.classList.add('hide');
 }
 function handle(ev) { for (const e of ev) {
-    if (e.t === 'bump') { RUN.shake = Math.max(RUN.shake, 0.25 + e.f*0.5); if (RUN.kind !== 'demo') { SFX.bump(e.f); buzz(e.f > 0.5 ? 'heavy' : 'medium'); } for (let i = 0; i < 8; i++) emit(RUN.S.x, 0.2, RUN.S.z, (Math.random() - 0.5)*7, 2 + Math.random()*3, (Math.random() - 0.5)*7, 0.5, 0.25, 0.1, 1, 1, 1, 0.95, 0); }
+    if (e.t === 'bump') { RUN.shake = Math.max(RUN.shake, 0.25 + e.f*0.5); if (RAFT) for (const c of RAFT.crew) { c.vy = 2.2 + e.f*3 + Math.random()*1.2; c.hop = Math.max(c.hop, 0.01); c.shock = 0.6; } if (RUN.kind !== 'demo' && e.f > 0.35) shout(RUN.S.x, RUN.S.z, '#ffffff', 'БДЫЩ'); if (RUN.kind !== 'demo') { SFX.bump(e.f); buzz(e.f > 0.5 ? 'heavy' : 'medium'); } for (let i = 0; i < 8; i++) emit(RUN.S.x, 0.2, RUN.S.z, (Math.random() - 0.5)*7, 2 + Math.random()*3, (Math.random() - 0.5)*7, 0.5, 0.25, 0.1, 1, 1, 1, 0.95, 0); }
     else if (e.t === 'bean') { const b = LV.L.beans[e.k]; if (b) for (let i = 0; i < 14; i++) emit(b.x, 0.6, b.z, (Math.random() - 0.5)*6, 3 + Math.random()*3, (Math.random() - 0.5)*6, 0.7, 0.3, 0.12, 1, 0.75 + Math.random()*0.2, 0.2, 1, 0); if (RUN.kind !== 'demo') { SFX.bean(); pop('🥫 ТУРБО!', true); buzz('light'); } }
-    else if (e.t === 'volley') { RUN.vol = 0.35; if (RUN.kind !== 'demo') { SFX.volley(); pop('ЗАЛП!'); buzz('heavy'); } }
+    else if (e.t === 'volley') { RUN.vol = 0.35; if (RAFT) for (const c of RAFT.crew) c.cheer = 0.8; if (RUN.kind !== 'demo') { SFX.volley(); pop('ЗАЛП!'); buzz('heavy'); } }
     else if (e.t === 'finish' && RUN.kind === 'solo') finished({ lv: RUN.S.lv, time: e.time, stars: e.stars, bumps: RUN.S.bumps, volleys: RUN.S.volleys, n: 1 });
     else if (e.t === 'finish' && RUN.kind === 'demo') RUN.over = true; } }
 function finished(r) {
@@ -269,14 +335,14 @@ function frame(now) { requestAnimationFrame(frame); const dt = Math.min(0.1, (no
   // raft
   const g = RAFT.g, bob = Math.sin(T*2.3)*0.035; g.position.set(x, 0, z); g.rotation.y = -a; RAFT.b.position.y = 0.06 + bob; RAFT.b.rotation.x = Math.sin(T*1.7)*0.03 + clamp(S.w*0.07, -0.2, 0.2); RAFT.b.rotation.z = Math.sin(T*2.1 + 1)*0.025 + (vol || hot ? 0.07 : 0);
   RAFT.flag.rotation.y = Math.sin(T*9)*0.25*clamp(sp/5, 0.2, 1);
-  S.jets.forEach((j, k) => { const c = RAFT.crew[k]; if (!c) return; const fire = j.fire && S.ph === 'run'; c.f += ((fire ? 1 : 0) - c.f)*Math.min(1, dt*14);
-    c.c.rotation.z = -0.38*c.f; c.c.position.y = 0.3 + (fire ? Math.sin(T*70 + k)*0.025 : 0); c.c.scale.setScalar(1 + c.f*0.1 + (fire ? Math.sin(T*50)*0.02 : 0));
+  S.jets.forEach((j, k) => { const c = RAFT.crew[k]; if (!c) return; const fire = j.fire && S.ph === 'run'; if (RUN.over) c.party = true;
+    if (guyStep(c, j, S.ph === 'run', dt, fire) && play) shout(x - fx*1.5 + rx*c.off*0.82, z - fz*1.5 + rz*c.off*0.82, PCOL[k]);
     if (play) fartSound(k, fire, j.g, hot || vol);
-    if (fire) { c.puff += dt*(vol ? 70 : hot ? 55 : 34); while (c.puff >= 1) { c.puff -= 1; const jx = x - fx*1.35 + rx*c.off*0.82, jz = z - fz*1.35 + rz*c.off*0.82, v = 4 + Math.random()*3, sx = (Math.random() - 0.5)*2.2, big = vol ? 1.5 : 1;
+    if (fire) { c.puffAcc += dt*(vol ? 70 : hot ? 55 : 34); while (c.puffAcc >= 1) { c.puffAcc -= 1; const jx = x - fx*(1.45 + c.c.position.x + 0.78) + rx*c.off*0.82, jz = z - fz*(1.45 + c.c.position.x + 0.78) + rz*c.off*0.82, v = 4 + Math.random()*3, sx = (Math.random() - 0.5)*2.2, big = vol ? 1.5 : 1;
           const col = hot ? [1, 0.62 + Math.random()*0.2, 0.2] : [0.72 + Math.random()*0.12, 0.88, 0.25 + Math.random()*0.12];
-          emit(jx, 0.5 + Math.random()*0.2, jz, -fx*v + rx*sx + S.vx*0.5, 0.5 + Math.random()*0.9, -fz*v + rz*sx + S.vz*0.5, 0.75 + Math.random()*0.5, 0.25*big, (0.95 + Math.random()*0.6)*big, col[0], col[1], col[2], 0.92); } } });
+          emit(jx, 0.6 + Math.random()*0.25, jz, -fx*v + rx*sx + S.vx*0.5, 0.5 + Math.random()*0.9, -fz*v + rz*sx + S.vz*0.5, 0.75 + Math.random()*0.5, 0.25*big, (0.95 + Math.random()*0.6)*big, col[0], col[1], col[2], 0.92); } } });
   if (sp > 2.5 && Math.random() < dt*sp*2.2) emit(x - fx*1.2 + rx*(Math.random() - 0.5)*2, 0.06, z - fz*1.2 + rz*(Math.random() - 0.5)*2, 0, 0, 0, 0.9, 0.2, 0.55, 1, 1, 1, 0.6);
-  puffStep(dt);
+  puffStep(dt); shoutStep(dt);
   // the river's moving parts
   for (const l of LV.logs) l.m.rotation.y = -(l.o.ph + l.o.sp*Math.max(0, tm));
   LV.beans.forEach((b, k) => { const on = !S.beans[k]; b.c.visible = b.ring.visible = on; if (on) { b.c.position.y = 0.5 + Math.sin(T*3 + k)*0.1; b.c.rotation.y = T*1.6 + k; const s = 1 + Math.sin(T*4 + k)*0.12; b.ring.scale.set(s, s, 1); } });

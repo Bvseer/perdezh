@@ -111,17 +111,17 @@ async function telegram(env, request) {
   let up = null; try { up = await request.json(); } catch (e) { return new Response('ok'); }
   const m = up && up.message; if (!m || !m.chat || typeof m.text !== 'string') return new Response('ok');
   const cmd = m.text.trim().split(/[\s@]/)[0].toLowerCase();
-  if (cmd === '/game' || cmd === '/play' || (cmd === '/start' && m.chat.type !== 'private')) {
+  if (cmd === '/fart' || cmd === '/game' || cmd === '/play' || (cmd === '/start' && m.chat.type !== 'private')) {
     const id = newId(), who = m.from ? cleanName(m.from) : '';
     await tg(env, 'sendMessage', { chat_id: m.chat.id, text: '💨 ' + who + ' собирает экипаж на плот! Нужно от 2 до 4 человек — каждый пукает со своей стороны.', reply_markup: { inline_keyboard: [[{ text: '🛶 Запрыгнуть на плот', url: link(env, id) }]] } });
   } else if (cmd === '/start' || cmd === '/help') {
-    await tg(env, 'sendMessage', { chat_id: m.chat.id, text: 'Один плот на всех, вместо мотора — вы сами. Пукнул левый — плот несёт вправо, пукнул правый — влево, вместе — прямо.\n\nС друзьями: добавь меня в группу и напиши /game.', reply_markup: { inline_keyboard: [[{ text: '💨 Играть', url: 'https://t.me/' + botName(env) + '?startapp=home' }]] } });
+    await tg(env, 'sendMessage', { chat_id: m.chat.id, text: 'Один плот на всех, вместо мотора — вы сами. Пукнул левый — плот несёт вправо, пукнул правый — влево, вместе — прямо.\n\nС друзьями: добавь меня в группу и напиши /fart.', reply_markup: { inline_keyboard: [[{ text: '💨 Играть', url: 'https://t.me/' + botName(env) + '?startapp=home' }]] } });
   }
   return new Response('ok');
 }
 async function setup(env, origin) {
   const hook = await tg(env, 'setWebhook', { url: origin + '/tg', secret_token: env.HOOK_SECRET, allowed_updates: ['message'] });
-  const cmds = await tg(env, 'setMyCommands', { commands: [{ command: 'game', description: 'Собрать экипаж на плот' }, { command: 'help', description: 'Как играть' }] });
+  const cmds = await tg(env, 'setMyCommands', { commands: [{ command: 'fart', description: 'Собрать экипаж на плот' }, { command: 'help', description: 'Как играть' }] });
   return { webhook: !!(hook && hook.ok), commands: !!(cmds && cmds.ok) };
 }
 
