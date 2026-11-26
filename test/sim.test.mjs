@@ -25,8 +25,13 @@ for (const aim of [0, 1.2, -2.5, Math.PI]) { const S = G.newRun(0, 1); settle(S)
 { const S = G.newRun(0, 2); settle(S); const z0 = S.z; let v = 0; for (let i = 0; i < 60; i++) { G.input(S, 0, -Math.PI/2, i > 30); G.input(S, 1, -Math.PI/2, i > 30); G.step(S); v += S.ev.filter((e) => e.t === 'volley').length; } ok(z0 - S.z > 2 && v === 1, 'together: should fly and give one volley, got ' + v); }
 // a raft that spins carries its crew round: for a while they push the wrong way
 { const S = G.newRun(0, 1); settle(S); G.input(S, 0, -Math.PI/2, false); for (let i = 0; i < 30; i++) G.step(S); const off = () => Math.abs(wrap(-Math.PI/2 + Math.PI - S.a - S.crew[0].phi)); ok(off() < 0.05, 'should be standing in place'); S.w = 7; let worst = 0; for (let i = 0; i < 25; i++) { G.step(S); worst = Math.max(worst, off()); } ok(worst > 0.3, 'a fast spin should carry the crew off their place: ' + worst.toFixed(2)); for (let i = 0; i < 120; i++) G.step(S); ok(off() < 0.1, 'and they should get back to it'); }
+// the current: an idle raft is carried along at a good pace, faster where the river is narrow, and wide on a bend
+{ const S = G.newRun(0, 1); settle(S); const s0 = S.s; for (let i = 0; i < 90; i++) G.step(S); ok(S.s - s0 > 5, 'an idle raft should be carried a good way in 3 s: ' + (S.s - s0).toFixed(1));
+  const L = G.level(lvOf('rocks')), sp = (s) => G.current(L, G.locate(L, ...L.at(s, 0), Math.floor(s/2)))[2]; ok(sp(100) > sp(20)*1.25, 'the gorge should run faster than the open river: ' + sp(100).toFixed(1) + ' vs ' + sp(20).toFixed(1));
+  const mid = sp(20), side = G.current(L, G.locate(L, ...L.at(20, 5), 10))[2]; ok(side < mid*0.75, 'the current should be slower by the bank');
+  const B = G.level(lvOf('bends')), T = G.newRun(B.i, 1); settle(T); place(T, 30, 0); for (let i = 0; i < 60; i++) G.step(T); const loc = G.locate(B, T.x, T.z, T.hint); ok(loc.d < -1, 'a right-hand bend should carry an idle raft to the left bank: ' + loc.d.toFixed(2)); }
 // a tank runs dry and refills
-{ const S = G.newRun(0, 2); settle(S); G.input(S, 0, null, true); for (let i = 0; i < 30*4; i++) G.step(S); ok(S.crew[0].g < 0.03 && !S.crew[0].fire, 'tank should be empty'); G.input(S, 0, null, false); for (let i = 0; i < 30*3; i++) G.step(S); ok(S.crew[0].g > 0.95, 'tank should refill'); }
+{ const S = G.newRun(0, 2); settle(S); S.beans.fill(true); G.input(S, 0, null, true); for (let i = 0; i < 30*4; i++) G.step(S); ok(S.crew[0].g < 0.03 && !S.crew[0].fire, 'tank should be empty'); G.input(S, 0, null, false); for (let i = 0; i < 30*3; i++) G.step(S); ok(S.crew[0].g > 0.95, 'tank should refill'); }
 // a crocodile sinks the raft, and it comes back at the last checkpoint with a moment of safety
 { const S = G.newRun(lvOf('crocs'), 2); settle(S); const L = S.L, cp = L.cps[0], croc = L.solids.find((o) => o.t === 'croc');
   place(S, cp.s + 0.5, 0); G.step(S); ok(S.cp === 0, 'checkpoint not taken'); let sunk = false, backEv = false;

@@ -1,6 +1,6 @@
 // Пердёж-балдёж — what you see and touch. The rules of the river live in sim.js (the server runs the same file).
 import * as THREE from 'three';
-import * as G from './sim.js?v=0.5';
+import * as G from './sim.js?v=0.6';
 
 const $ = (id) => document.getElementById(id);
 const TG = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
@@ -183,16 +183,17 @@ const THEMES = {
   canyon: { sky: '#f7c79a', ground: ['#d98e55', '#c97d48'], top: ['#dd8850', '#c56e3c'], side: '#b55c34', sand: '#f0c995', H: 4.8, rough: 1.0, steep: true, water: ['#0f7a9e', '#48c4d2', '#fff3e0'], glint: 0.11, hemi: [0xfff0dc, 0xc97d48, 2.2], sun: [0xffd2a0, 2.1], hue: [0.25, 0.33, 0.35, 0.33],
     deco: [['cactus', 5, 'ridge'], ['dead', 4, 'ridge'], ['boulder', 7, 'bank'], ['bush', 2, 'bank'], ['boulder', 5, 'ridge'], ['cactus', 5, 'far'], ['boulder', 4, 'far']], rockHue: '#c8713f' },
 };
-const WU = { uT: U.uT, uDeep: { value: srgb('#1b8fe0') }, uShal: { value: srgb('#5cd3ee') }, uFoam: { value: srgb('#ffffff') }, uGlint: { value: 0.1 } };
+const WU = { uSpeed: { value: 1 }, uT: U.uT, uDeep: { value: srgb('#1b8fe0') }, uShal: { value: srgb('#5cd3ee') }, uFoam: { value: srgb('#ffffff') }, uGlint: { value: 0.1 } };
 const waterMat = new THREE.ShaderMaterial({ uniforms: WU, side: THREE.DoubleSide,
-  vertexShader: 'attribute float aLat; attribute float aW; attribute float aS; attribute float aFall; varying float vLat; varying float vW; varying float vS; varying float vFall; void main(){ vLat=aLat; vW=aW; vS=aS; vFall=aFall; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader: `precision highp float; uniform float uT; uniform vec3 uDeep; uniform vec3 uShal; uniform vec3 uFoam; uniform float uGlint; varying float vLat; varying float vW; varying float vS; varying float vFall;
+  vertexShader: 'attribute float aLat; attribute float aW; attribute float aS; attribute float aFall; attribute float aFast; varying float vLat; varying float vW; varying float vS; varying float vFall; varying float vFast; void main(){ vLat=aLat; vW=aW; vS=aS; vFall=aFall; vFast=aFast; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: `precision highp float; uniform float uT; uniform float uSpeed; uniform vec3 uDeep; uniform vec3 uShal; uniform vec3 uFoam; uniform float uGlint; varying float vLat; varying float vW; varying float vS; varying float vFall; varying float vFast;
     float h(vec2 p){ p = fract(p*vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y)*p.y); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f); return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
-    void main(){ float e = vW - abs(vLat); vec2 q = vec2(vLat, vS);
+    void main(){ float e = vW - abs(vLat); vec2 q = vec2(vLat, vS); float tt = uT*uSpeed;
       vec3 c = mix(uShal, uDeep, smoothstep(0.0, 3.8, e));
-      float n1 = vn(q*vec2(0.55, 0.22) + vec2(0.0, -uT*0.55)), n2 = vn(q*vec2(1.3, 0.6) + vec2(7.3, -uT*1.1));
-      c += uGlint*smoothstep(0.56, 0.8, n1*0.55 + n2*0.5); c -= 0.05*smoothstep(0.45, 0.2, n1);
+      float n1 = vn(q*vec2(0.55, 0.22) + vec2(0.0, -tt*0.75)), n2 = vn(q*vec2(1.3, 0.6) + vec2(7.3, -tt*1.5));
+      c += uGlint*smoothstep(0.56 - 0.14*vFast, 0.8, n1*0.55 + n2*0.5);
+      float mid = smoothstep(0.0, 0.5, e/vW), sl = smoothstep(0.74 - 0.12*vFast, 0.92, vn(vec2(vLat*2.6, vS*0.16 - tt*1.25)))*mid; c = mix(c, uFoam, sl*(0.22 + 0.4*vFast)); c -= 0.05*smoothstep(0.45, 0.2, n1);
       c += uGlint*0.8*smoothstep(0.8, 0.95, vn(q*1.9 + vec2(uT*0.25, -uT*0.9)));
       float wob = (vn(q*vec2(1.2, 0.8) + vec2(0.0, -uT*0.7)) - 0.5)*0.55;
       float foam = 1.0 - smoothstep(0.18, 0.55, e + wob);
@@ -205,10 +206,10 @@ const tintMat = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: t
 const hsh = (i, j) => { let n = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0)/4294967295; };
 const vnoise = (x, z) => { const i = Math.floor(x), j = Math.floor(z), fx = x - i, fz = z - j, u = fx*fx*(3 - 2*fx), v = fz*fz*(3 - 2*fz); return lerp(lerp(hsh(i, j), hsh(i + 1, j), u), lerp(hsh(i, j + 1), hsh(i + 1, j + 1), u), v)*2 - 1; };
 // a strip of water along the river; steep places (waterfalls) are marked so the picture turns them white
-function ribbon(E, f0, f1, yoff) { const n = E.length, pos = new Float32Array(n*6), lat = new Float32Array(n*2), ww = new Float32Array(n*2), ss = new Float32Array(n*2), fl = new Float32Array(n*2), idx = [];
-  for (let i = 0; i < n; i++) { const e = E[i], a = f0(e), b = f1(e), y = e.y + yoff, st = Math.min(1, Math.abs((E[Math.min(n - 1, i + 1)].y - E[Math.max(0, i - 1)].y))/2.2); pos.set([e.x + e.rx*a, y, e.z + e.rz*a, e.x + e.rx*b, y, e.z + e.rz*b], i*6); lat[i*2] = a; lat[i*2 + 1] = b; ww[i*2] = ww[i*2 + 1] = e.w; ss[i*2] = ss[i*2 + 1] = e.s; fl[i*2] = fl[i*2 + 1] = st;
+function ribbon(E, f0, f1, yoff) { const n = E.length, pos = new Float32Array(n*6), lat = new Float32Array(n*2), ww = new Float32Array(n*2), ss = new Float32Array(n*2), fl = new Float32Array(n*2), fa = new Float32Array(n*2), idx = [];
+  for (let i = 0; i < n; i++) { const e = E[i], a = f0(e), b = f1(e), y = e.y + yoff, st = Math.min(1, Math.abs((E[Math.min(n - 1, i + 1)].y - E[Math.max(0, i - 1)].y))/2.2); pos.set([e.x + e.rx*a, y, e.z + e.rz*a, e.x + e.rx*b, y, e.z + e.rz*b], i*6); lat[i*2] = a; lat[i*2 + 1] = b; ww[i*2] = ww[i*2 + 1] = e.w; ss[i*2] = ss[i*2 + 1] = e.s; fl[i*2] = fl[i*2 + 1] = st; fa[i*2] = fa[i*2 + 1] = e.fast || 0;
     if (i < n - 1 && !e.gap && !E[i + 1].gap) idx.push(i*2, i*2 + 1, i*2 + 2, i*2 + 1, i*2 + 3, i*2 + 2); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aLat', new THREE.BufferAttribute(lat, 1)); g.setAttribute('aW', new THREE.BufferAttribute(ww, 1)); g.setAttribute('aS', new THREE.BufferAttribute(ss, 1)); g.setAttribute('aFall', new THREE.BufferAttribute(fl, 1)); g.setIndex(idx); return g; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aLat', new THREE.BufferAttribute(lat, 1)); g.setAttribute('aW', new THREE.BufferAttribute(ww, 1)); g.setAttribute('aS', new THREE.BufferAttribute(ss, 1)); g.setAttribute('aFall', new THREE.BufferAttribute(fl, 1)); g.setAttribute('aFast', new THREE.BufferAttribute(fa, 1)); g.setIndex(idx); return g; }
 // land along one side of the river: rows of points going away from the water, each with its own height and colour
 function strips(E, side, rows) { const n = E.length, R = rows.length, pos = new Float32Array(n*R*3), col = new Float32Array(n*R*3), idx = [], c = new THREE.Color();
   for (let i = 0; i < n; i++) for (let r = 0; r < R; r++) { const e = E[i], d = side*(e.w + rows[r].d), x = e.x + e.rx*d, z = e.z + e.rz*d, k = (i*R + r)*3; pos[k] = x; pos[k + 1] = rows[r].y(e, x, z); pos[k + 2] = z; rows[r].c(c, x, z); col[k] = c.r; col[k + 1] = c.g; col[k + 2] = c.b;
@@ -255,13 +256,13 @@ function buildLevel(i) {
   const L = G.level(i), P = L.P, g = new THREE.Group(), rnd = rng(77 + i*131), E = [], Tm = THEMES[L.theme] || THEMES.meadow, sky = L.sky, end = G.elev(L, L.len + 10), base = end - 0.03;
   // the look of this land
   scene.background = new THREE.Color(Tm.sky); HEMI.color.set(Tm.hemi[0]); HEMI.groundColor.set(Tm.hemi[1]); HEMI.intensity = Tm.hemi[2]; sun.color.set(Tm.sun[0]); sun.intensity = Tm.sun[1];
-  WU.uDeep.value = srgb(Tm.water[0]); WU.uShal.value = srgb(Tm.water[1]); WU.uFoam.value = srgb(Tm.water[2]); WU.uGlint.value = Tm.glint; document.body.style.background = Tm.sky;
+  WU.uDeep.value = srgb(Tm.water[0]); WU.uShal.value = srgb(Tm.water[1]); WU.uFoam.value = srgb(Tm.water[2]); WU.uGlint.value = Tm.glint; WU.uSpeed.value = L.flow/2.2; document.body.style.background = Tm.sky;
   // the river a little before the start and a pond after the finish, so the picture has no edge
   const p0 = P[0], pl = P[P.length - 1], inGap = (s) => L.gaps.some((q) => s > q[0] + 0.1 && s < q[1] - 0.1);
   for (let k = sky ? 4 : 16; k >= 1; k--) E.push({ x: p0.x - Math.cos(p0.a)*2*k, z: p0.z - Math.sin(p0.a)*2*k, w: p0.w, s: -2*k, open: p0.open });
   for (const p of P) E.push({ x: p.x, z: p.z, w: p.w, s: p.s, open: p.open, gap: inGap(p.s) });
   for (let k = 1; k <= (sky ? 8 : 26); k++) E.push({ x: pl.x + Math.cos(pl.a)*2*k, z: pl.z + Math.sin(pl.a)*2*k, w: pl.w + Math.min(k, 9)*(sky ? 0.5 : 0.9), s: pl.s + 2*k, open: pl.open });
-  for (let k = 0; k < E.length; k++) { const a = E[Math.max(0, k - 1)], b = E[Math.min(E.length - 1, k + 1)], d = Math.hypot(b.x - a.x, b.z - a.z) || 1, e = E[k]; e.tx = (b.x - a.x)/d; e.tz = (b.z - a.z)/d; e.rx = -e.tz; e.rz = e.tx; e.y = G.elev(L, e.s); }
+  for (let k = 0; k < E.length; k++) { const a = E[Math.max(0, k - 1)], b = E[Math.min(E.length - 1, k + 1)], d = Math.hypot(b.x - a.x, b.z - a.z) || 1, e = E[k]; e.tx = (b.x - a.x)/d; e.tz = (b.z - a.z)/d; e.rx = -e.tz; e.rz = e.tx; e.y = G.elev(L, e.s); e.fast = clamp((L.flow*clamp(L.w0/e.w, 0.5, 1.7) - 2)/3.2, 0, 1); }
   let cx = 0, cz = 0; for (const e of E) { cx += e.x; cz += e.z; } cx /= E.length; cz /= E.length;
   g.add(new THREE.Mesh(ribbon(E, (e) => -e.w, (e) => e.w, 0), waterMat));
   const C = (h) => new THREE.Color(h), sand = C(Tm.sand), side = C(Tm.side), top0 = C(Tm.top[0]), top1 = C(Tm.top[1]), gr0 = C(Tm.ground[0]), gr1 = C(Tm.ground[1]);
@@ -579,6 +580,9 @@ function frame(now) { requestAnimationFrame(frame); const dt = Math.min(0.1, (no
   // the arrow: where my push would send us
   const me = kind === 'solo' ? 0 : kind === 'net' ? RUN.seat : -1, mc = me >= 0 ? S.crew[me] : null; RAFT.arrow.visible = !!mc && mc.aim != null && S.ph === 'run' && S.dead <= 0; if (RAFT.arrow.visible) { RAFT.arrow.rotation.y = -mc.aim; RAFT.arrow.children[0].material.color.set(PCOL[me]); RAFT.arrow.children[0].material.opacity = mc.fire ? 0.95 : 0.55; RAFT.arrow.position.y = 0.06 - lift; }
   if (sp > 2.5 && hgt === 0 && under === 0 && Math.random() < dt*sp*3) { const b = Math.atan2(S.vz, S.vx) + Math.PI + (Math.random() - 0.5)*1.6; emit(x + Math.cos(b)*1.4, ey + 0.06, z + Math.sin(b)*1.4, 0, 0, 0, 1.0, 0.25, 0.7, 1, 1, 1, 0.55); }
+  // flecks of foam and leaves riding the current, so you can see where it runs and how fast
+  for (let q = 0; q < 2; q++) if (Math.random() < dt*16) { const fs = clamp(loc.s - 10 + Math.random()*46, 0.5, L.len - 0.5), fm = L.mid(fs), fl = (Math.random()*2 - 1)*(fm.w - 0.4), fx = fm.x - fm.tz*fl, fz = fm.z + fm.tx*fl; if (L.gaps.some((gp) => fs > gp[0] && fs < gp[1])) continue;
+    const cu = G.current(L, G.locate(L, fx, fz, Math.floor(fs/2))), leaf = Math.random() < 0.25; emit(fx, G.elev(L, fs) + 0.05, fz, cu[0], 0, cu[1], 1.8 + Math.random()*1.2, leaf ? 0.2 : 0.13, leaf ? 0.18 : 0.08, leaf ? 0.95 : 1, leaf ? 0.8 : 1, leaf ? 0.3 : 1, leaf ? 0.9 : 0.75, 0.02); }
   if (LV.Tm.fireflies && Math.random() < dt*10) emit(x + (Math.random() - 0.5)*30, ey + 0.5 + Math.random()*3, z + (Math.random() - 0.5)*30, (Math.random() - 0.5)*0.8, 0.2, (Math.random() - 0.5)*0.8, 2.2, 0.16, 0.05, 1, 0.95, 0.4, 1);
   puffStep(dt); shoutStep(dt);
   // the river's moving parts
