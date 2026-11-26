@@ -93,10 +93,10 @@ export class Room {
     const want = Math.min(S.tick + 5, Math.floor((Date.now() - this.t0)/STEP_MS));
     while (S.tick < want && S.ph !== 'done') {
       const lost = []; this.seats.forEach((m, k) => { if (!m.ws) lost.push(k); }); if (lost.length) G.pilot(S, lost);
-      G.step(S); for (const e of S.ev) if (e.t !== 'count' && e.t !== 'fart' && e.t !== 'empty' && e.t !== 'go') this.ev.push(e);
+      G.step(S); for (const e of S.ev) if (e.t !== 'go') this.ev.push(e);
       if (S.tick % SEND_EVERY === 0 || S.ph === 'done') { this.all({ t: 's', d: G.save(S), e: this.ev.length ? this.ev : undefined }); this.ev = []; }
     }
-    if (S.ph === 'done') { this.ph = 'done'; this.last = { lv: this.lv, time: S.time, stars: S.stars, bumps: S.bumps, volleys: S.volleys }; clearInterval(this.timer); this.timer = null; this.all({ t: 'over', lv: this.lv, time: S.time, stars: S.stars, bumps: S.bumps, volleys: S.volleys, n: this.seats.length }); this.tellRoom(); return; }
+    if (S.ph === 'done') { this.ph = 'done'; this.last = { lv: this.lv, time: S.time, stars: S.stars, bumps: S.bumps, volleys: S.volleys, wipes: S.wipes, gold: G.goldCount(S) }; clearInterval(this.timer); this.timer = null; this.all(Object.assign({ t: 'over', n: this.seats.length }, this.last)); this.tellRoom(); return; }
     if (S.tick % 30 === 0) this.sweep();
     // nobody left on the raft for a while: tie it up
     if (this.seats.some((m) => m.ws)) this.empty = 0; else if (++this.empty > 30*20) this.toBank();

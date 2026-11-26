@@ -27,6 +27,7 @@
   #prog { flex: 1; height: 34px; position: relative; padding: 0 !important; overflow: hidden; }
   #progFill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #9fe0f5; }
   #progRaft { position: absolute; top: 50%; left: 0; transform: translate(-50%, -50%); font-size: 18px; }
+  #prog .tick { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: #39d353; opacity: .8; }
   #progEnd { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 16px; }
   #progName { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; opacity: .75; }
   .ico { pointer-events: auto; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0 !important; cursor: pointer; }
@@ -57,11 +58,11 @@
   h1 { margin: 6px 0 2px; font: 900 40px/0.95 Rubik, sans-serif; text-align: center; color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 var(--ink); transform: rotate(-3deg); }
   h1 span { color: var(--gas); display: block; }
   .sub { margin: 10px 0 12px; text-align: center; background: rgba(255,246,220,.9); border-radius: 12px; padding: 5px 10px; font-size: 13px; }
-  #levels { width: 100%; max-width: 460px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; margin-bottom: 14px; }
+  #levels { width: 100%; max-width: 460px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 10px; margin-bottom: 14px; }
   .lv { padding: 9px 10px 8px; cursor: pointer; position: relative; border-radius: 18px; }
   .lv:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
   .lv .n { position: absolute; top: -9px; left: -7px; width: 28px; height: 28px; border-radius: 50%; background: var(--yel); border: 3px solid var(--ink); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; }
-  .lv .nm { font-weight: 900; font-size: 15px; margin-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv .nm { font-weight: 900; font-size: 14.5px; line-height: 1.1; margin-left: 16px; min-height: 32px; display: flex; align-items: center; }
   .lv .st { font-size: 17px; letter-spacing: 1px; margin-top: 2px; } .lv .st s { text-decoration: none; filter: grayscale(1); opacity: .3; }
   .lv .bt { font-size: 12px; opacity: .7; }
   .lv.lock { background: #e8e1cc; cursor: default; } .lv.lock .nm, .lv.lock .bt { opacity: .5; }
@@ -74,7 +75,9 @@
   #over .card { width: 100%; max-width: 380px; padding: 16px 16px 18px; text-align: center; }
   #oTitle { font: 900 26px Rubik, sans-serif; } #oStars { font-size: 46px; letter-spacing: 4px; margin: 4px 0; } #oStars s { text-decoration: none; filter: grayscale(1); opacity: .25; }
   #oTime { font: 900 34px Rubik, sans-serif; font-variant-numeric: tabular-nums; } #oBest { font-size: 13px; opacity: .75; margin-bottom: 8px; }
-  #oStat { display: flex; justify-content: center; gap: 14px; font-size: 13px; margin-bottom: 14px; }
+  #oStat { display: flex; justify-content: center; gap: 12px; font-size: 12.5px; margin-bottom: 6px; opacity: .8; }
+  #oRows { margin: 4px 0 10px; text-align: left; } .rw { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 3px solid var(--ink); border-radius: 12px; margin-top: 6px; background: #efe7cf; font-size: 14px; } .rw i { font-style: normal; filter: grayscale(1); opacity: .35; } .rw b { margin-left: auto; font-weight: 900; }
+  .rw.ok { background: #d9f3a0; } .rw.ok i { filter: none; opacity: 1; }
   #over .btn { margin-top: 10px; width: 100%; }
 
   /* friends room */
@@ -99,6 +102,7 @@
   <div id="top">
     <div class="box" id="hTime">0:00.0</div>
     <div class="box" id="prog"><div id="progFill"></div><div id="progName"></div><div id="progRaft">🛶</div><div id="progEnd">🏁</div></div>
+    <div class="box ico hide" id="redo">↻</div>
     <div class="box ico" id="mute">🔊</div>
     <div class="box ico" id="quit">✕</div>
   </div>
@@ -120,6 +124,7 @@
     <p><b>Каждый пукает со своей стороны.</b> Пукнул левый — плот заносит вправо. Пукнул правый — влево.</p>
     <p><b>Вместе — прямо.</b> Нажали одновременно — <b>ЗАЛП</b>, плот летит в полтора раза быстрее.</p>
     <p><b>Газ кончается.</b> Отпусти — накопится. Банка фасоли 🥫 заправляет всех и даёт турбо.</p>
+    <p><b>Три звезды:</b> доплыть, уложиться во время и собрать три золотых рулона 🧻. Утонул — начинаешь с последнего чекпойнта.</p>
     <p>Одному: две кнопки на экране или <b>A / D</b>, обе сразу — <b>W</b> или пробел.</p>
   </div>
   <div id="ver"></div>
@@ -143,6 +148,7 @@
     <div id="oStars"></div>
     <div id="oTime">0:00.00</div>
     <div id="oBest"></div>
+    <div id="oRows"></div>
     <div id="oStat"></div>
     <div class="btn" id="oNext">Дальше ▶</div>
     <div class="btn alt" id="oAgain">↻ Ещё раз</div>
@@ -151,6 +157,6 @@
 </div>
 
 <div id="toast"></div>
-<script type="module" src="./game.js?v=0.3"></script>
+<script type="module" src="./game.js?v=0.4"></script>
 </body>
 </html>
